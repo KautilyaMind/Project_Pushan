@@ -1,86 +1,98 @@
-# Pushan — A New-Gen Smart Irrigation Project (V0.1)
+# Pushan — A New-Gen Smart Irrigation Project (V0.2)
 
-Pushan V0.1 is a beginner-readable, rule-based irrigation decision engine. It
-uses farm measurements and simple crop requirements to decide whether a field
-needs irrigation and, when it does, recommend an amount of water.
+Pushan is a beginner-readable smart agriculture process-intelligence project.
+V0.2 combines a deterministic sensor simulation with the existing rule-based
+irrigation engine and a new operational feasibility check.
 
-V0.1 is intentionally rule-based and does **not** yet use AI or machine
-learning. Its crop values are simplified prototype values and are not
-scientifically authoritative agronomic guidance.
+V0.2 remains intentionally rule-based. It does **not** use AI, machine learning,
+external APIs, databases, or real IoT devices. Crop thresholds are simplified
+prototype values and are not authoritative agronomic guidance.
 
-## What V0.1 does
+## What changed from V0.1
 
-- Supports tomato, rice, and cotton.
-- Validates farm input before making a recommendation.
-- Avoids watering soil that already has sufficient moisture.
-- Postpones irrigation when the probability of rain is at least 70%.
-- Calculates water from field area and the selected crop's rate.
-- Adds 15% in temperatures above 35°C and then 10% in humidity below 35%.
-- Reports LOW, MEDIUM, HIGH, or UNKNOWN risk.
+```text
+V0.1: Manual farm inputs → irrigation rules → recommendation
+
+V0.2: Field ID → simulated sensor service → irrigation engine
+      → operational feasibility → final action
+```
+
+The original irrigation rules and V0.1 tests remain in place.
+
+## Irrigation requirement versus execution feasibility
+
+The irrigation engine asks: **Does this field need water, and how much?** The
+operational engine then asks: **Can that recommendation be executed safely now?**
+
+A field may require irrigation from an agronomic perspective, but the action
+may still be blocked because the pump is offline, the sensor is faulty, or
+insufficient water is available.
+
+Operational checks use this priority: irrigation requirement, sensor
+reliability, pump availability, water availability, and finally permission to
+irrigate.
 
 ## Architecture
 
-The data classes in `app/models.py` define and validate the engine's inputs and
-outputs. `app/irrigation_engine.py` contains all business rules. `main.py` is
-only a command-line demonstration. This separation lets future APIs, agents,
-and workflow tools reuse the same engine without depending on a user interface.
+- `app/models.py` defines validated farm, sensor, recommendation, and decision data.
+- `app/services/sensor_service.py` returns deterministic readings for three fields
+  and converts readings into the existing `FarmInput` model.
+- `app/irrigation_engine.py` preserves the V0.1 agronomic calculation.
+- `app/operational_engine.py` decides whether the recommendation can be executed.
+- `main.py` demonstrates the complete FIELD_001 pipeline.
+
+This separation allows a future sensor source to replace the simulation without
+rewriting either decision engine.
 
 ## Project structure
 
 ```text
-pushan v0.1/
+pushan/
 ├── app/
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── sensor_service.py
 │   ├── __init__.py
+│   ├── irrigation_engine.py
 │   ├── models.py
-│   └── irrigation_engine.py
+│   └── operational_engine.py
 ├── tests/
 │   ├── __init__.py
-│   └── test_irrigation_engine.py
+│   ├── test_irrigation_engine.py
+│   ├── test_operational_engine.py
+│   └── test_sensor_service.py
 ├── main.py
-├── requirements.txt
-└── README.md
+├── README.md
+└── requirements.txt
 ```
 
-## Requirements
+## Requirements and usage
 
 Python 3.11 or newer. No third-party packages are required.
 
-## Run the program
-
-From the `pushan v0.1` directory:
-
 ```powershell
 python main.py
+python -m unittest discover -s tests
 ```
 
-## Run the tests
+## FIELD_001 demonstration
 
-```powershell
-python -m unittest discover -s tests -v
-```
+FIELD_001 has dry soil, a healthy sensor, sufficient stored water, and an
+offline pump. For a 1,000 m² tomato field, the engine recommends 6,325 L after
+high-temperature and low-humidity adjustments. The operational engine blocks
+execution and returns `MAINTENANCE_REQUIRED` because the pump is offline.
 
-## Sample output
+## Simulated fields
 
-```text
-Pushan V0.1 - Smart Irrigation Recommendation
------------------------------------------------
-Irrigation required: Yes
-Recommended water: 6325 litres
-Risk: MEDIUM
-Reason: Soil moisture is 21%, below the target threshold of 30%. Water was adjusted by 15% for high temperature and 10% for low humidity.
-```
+- `FIELD_001`: dry soil, healthy sensor, offline pump.
+- `FIELD_002`: sufficient tomato soil moisture, healthy sensor, online pump.
+- `FIELD_003`: dry soil, healthy sensor, online pump, insufficient stored water
+  for a 1,000 m² tomato field.
 
-## Limitations of V0.1
+## Limitations and possible V0.3 direction
 
-- Crop thresholds are simplified constants, not region-specific agronomy.
-- Decisions use current values only; no sensor history or weather service exists.
-- Crop stage is recorded but does not yet change the calculation.
-- There is no database, API, graphical interface, authentication, or deployment.
-- There is no AI/ML, prediction, optimization, or automatic device control.
-
-## Planned future versions
-
-Future versions may add richer crop- and growth-stage rules, configuration,
-historical sensor data, weather integration, an API, persistence, explainable
-ML predictions, workflow automation, monitoring, and deployment. Each addition
-should continue to reuse or evolve the isolated business-logic layer.
+V0.2 has fixed simulated values, no reading history, no persistence, and no
+real device communication. A logical V0.3 could add timestamped readings,
+configurable field profiles, and historical storage while retaining the same
+engine boundaries. AI/ML should be considered only when sufficient trustworthy
+data and a clearly defined prediction problem exist.

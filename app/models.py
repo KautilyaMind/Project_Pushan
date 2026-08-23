@@ -1,4 +1,4 @@
-"""Data models used by the Pushan irrigation engine."""
+"""Data models used throughout Pushan V0.2."""
 
 from dataclasses import dataclass
 import math
@@ -51,5 +51,49 @@ class IrrigationRecommendation:
 
     irrigation_required: bool
     recommended_water_litres: float
+    reason: str
+    risk_level: str
+
+
+@dataclass(frozen=True)
+class SensorReading:
+    """A deterministic snapshot of field sensors and operational resources."""
+
+    field_id: str
+    soil_moisture: float
+    temperature: float
+    humidity: float
+    rain_probability: float
+    pump_status: str
+    water_available_litres: float
+    sensor_status: str
+
+    def __post_init__(self) -> None:
+        """Validate sensor measurements and supported status values."""
+        if not isinstance(self.field_id, str) or not self.field_id.strip():
+            raise ValueError("field_id must be a non-empty string")
+
+        FarmInput._validate_percentage("soil_moisture", self.soil_moisture)
+        FarmInput._validate_number("temperature", self.temperature)
+        FarmInput._validate_percentage("humidity", self.humidity)
+        FarmInput._validate_percentage("rain_probability", self.rain_probability)
+        FarmInput._validate_number("water_available_litres", self.water_available_litres)
+
+        if self.water_available_litres < 0:
+            raise ValueError("water_available_litres must be greater than or equal to 0")
+        if self.pump_status not in {"ONLINE", "OFFLINE"}:
+            raise ValueError("pump_status must be ONLINE or OFFLINE")
+        if self.sensor_status not in {"HEALTHY", "FAULTY"}:
+            raise ValueError("sensor_status must be HEALTHY or FAULTY")
+
+
+@dataclass(frozen=True)
+class OperationalDecision:
+    """The final action after checking whether irrigation can be executed."""
+
+    irrigation_required: bool
+    recommended_water_litres: float
+    execution_possible: bool
+    action_required: str
     reason: str
     risk_level: str

@@ -1,4 +1,4 @@
-"""Command-line demonstration of the persistent Pushan V0.3 workflow."""
+"""Command-line demonstration of the hybrid Pushan V0.4 workflow."""
 
 from typing import Any
 
@@ -13,6 +13,7 @@ from app.database.repository import (
     save_sensor_reading,
 )
 from app.irrigation_engine import calculate_irrigation
+from app.ml.predict import predict_water_requirement
 from app.operational_engine import evaluate_operational_feasibility
 from app.services.sensor_service import (
     FIELD_CONFIGURATIONS,
@@ -34,7 +35,7 @@ def print_history(title: str, records: list[dict[str, Any]], detail: str) -> Non
 
 
 def main() -> None:
-    """Run FIELD_001 through decision engines and persistent storage."""
+    """Compare rules and ML while keeping operational rules authoritative."""
     field_id = "FIELD_001"
     field_config = FIELD_CONFIGURATIONS[field_id]
 
@@ -58,10 +59,21 @@ def main() -> None:
     recommendation = calculate_irrigation(farm_input)
     save_irrigation_decision(field_id, recommendation)
 
+    ml_prediction = predict_water_requirement(farm_input)
+    prediction_difference = abs(
+        recommendation.recommended_water_litres - ml_prediction
+    )
+    if recommendation.recommended_water_litres > 0:
+        difference_percentage = (
+            prediction_difference / recommendation.recommended_water_litres * 100
+        )
+    else:
+        difference_percentage = 0.0
+
     decision = evaluate_operational_feasibility(recommendation, sensor_reading)
     save_operational_decision(field_id, decision)
 
-    print("PUSHAN V0.3 - The Next-Gen AI Agriculture Engine")
+    print("PUSHAN V0.4 - The Next-Gen AI Agriculture Engine")
     print("-" * 51)
     print(f"Field: {field_id}")
     print("\nCurrent Sensor Reading:")
@@ -73,10 +85,17 @@ def main() -> None:
     print(f"Sensor: {sensor_reading.sensor_status}")
     print(f"Water available: {sensor_reading.water_available_litres:g} L")
 
-    print("\nIrrigation Recommendation:")
-    print(f"Required: {yes_or_no(recommendation.irrigation_required)}")
-    print(f"Recommended water: {recommendation.recommended_water_litres:g} L")
+    print("\nRule-Based Irrigation Decision:")
+    print(f"Irrigation required: {yes_or_no(recommendation.irrigation_required)}")
+    print(f"Water recommendation: {recommendation.recommended_water_litres:g} L")
     print(f"Risk: {recommendation.risk_level}")
+
+    print("\nMachine Learning Prediction (advisory):")
+    print(f"Predicted water requirement: {ml_prediction:g} L")
+
+    print("\nComparison:")
+    print(f"Absolute difference: {prediction_difference:.2f} L")
+    print(f"Difference percentage: {difference_percentage:.2f}%")
 
     print("\nOperational Decision:")
     print(f"Execution possible: {yes_or_no(decision.execution_possible)}")

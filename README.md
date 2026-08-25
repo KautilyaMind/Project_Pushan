@@ -1,54 +1,85 @@
-# Pushan — A New-Gen Smart Irrigation Project (V0.2)
+# Pushan — The Next-Gen AI Agriculture Engine (V0.3)
 
 Pushan is a beginner-readable smart agriculture process-intelligence project.
-V0.2 combines a deterministic sensor simulation with the existing rule-based
-irrigation engine and a new operational feasibility check.
+V0.3 adds durable SQLite storage for fields, sensor readings, irrigation
+recommendations, and final operational actions.
 
-V0.2 remains intentionally rule-based. It does **not** use AI, machine learning,
-external APIs, databases, or real IoT devices. Crop thresholds are simplified
-prototype values and are not authoritative agronomic guidance.
+Despite its name, V0.3 still contains no machine learning or generative AI. Its
+decisions remain deterministic and rule-based, and its crop thresholds remain
+simplified prototype values rather than authoritative agronomic guidance.
 
-## What changed from V0.1
+## Project evolution
 
 ```text
-V0.1: Manual farm inputs → irrigation rules → recommendation
+V0.1
+manual inputs → rule-based irrigation decision
 
-V0.2: Field ID → simulated sensor service → irrigation engine
-      → operational feasibility → final action
+V0.2
+simulated sensors → irrigation decision → operational feasibility
+
+V0.3
+simulated sensors → persistent storage → irrigation decision history
+                  → operational action history
 ```
 
-The original irrigation rules and V0.1 tests remain in place.
+## What V0.3 adds
 
-## Irrigation requirement versus execution feasibility
+- Automatic creation of `data/pushan.db` and its parent directory.
+- Persistent field metadata and timestamped sensor readings.
+- Irrigation recommendation and operational action history.
+- Newest-first history retrieval by field ID.
+- Configurable database paths so tests use temporary databases.
+- Parameterized SQL, foreign-key checks, and clean connection handling.
 
-The irrigation engine asks: **Does this field need water, and how much?** The
-operational engine then asks: **Can that recommendation be executed safely now?**
+History allows operators to audit previous decisions, compare readings over
+time, understand system behavior, and eventually prepare trustworthy datasets
+for analytics or machine learning.
 
-A field may require irrigation from an agronomic perspective, but the action
-may still be blocked because the pump is offline, the sensor is faulty, or
-insufficient water is available.
+> V0.3 introduces memory at the application level, not AI memory.
 
-Operational checks use this priority: irrigation requirement, sensor
-reliability, pump availability, water availability, and finally permission to
-irrigate.
+The application is simply storing structured historical records in SQLite.
 
-## Architecture
+## Architecture and workflow
 
-- `app/models.py` defines validated farm, sensor, recommendation, and decision data.
-- `app/services/sensor_service.py` returns deterministic readings for three fields
-  and converts readings into the existing `FarmInput` model.
-- `app/irrigation_engine.py` preserves the V0.1 agronomic calculation.
-- `app/operational_engine.py` decides whether the recommendation can be executed.
-- `main.py` demonstrates the complete FIELD_001 pipeline.
+```text
+sensor_service.py       obtains deterministic sensor data
+        ↓
+repository.py           stores the sensor reading
+        ↓
+irrigation_engine.py    decides whether irrigation is needed
+        ↓
+repository.py           stores the recommendation
+        ↓
+operational_engine.py   checks whether execution is possible
+        ↓
+repository.py           stores the final action
+```
 
-This separation allows a future sensor source to replace the simulation without
-rewriting either decision engine.
+`app/database/db.py` owns the database path, connections, foreign-key setting,
+and schema creation. `app/database/repository.py` owns the small parameterized
+queries used to save and retrieve records. Keeping them separate prevents SQL
+from leaking into the engines or CLI and keeps schema setup distinct from
+application data operations.
+
+## Database schema
+
+- `fields`: one metadata record per field, including crop, stage, and area.
+- `sensor_readings`: timestamped environmental and equipment readings.
+- `irrigation_decisions`: timestamped outputs from the irrigation engine.
+- `operational_actions`: timestamped final actions after feasibility checks.
+
+Each history table links to `fields.field_id`. Boolean values are stored as
+SQLite integers (`0` or `1`), and timestamps use timezone-aware ISO 8601 text.
 
 ## Project structure
 
 ```text
-pushan/
+Project_Pushan/
 ├── app/
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── db.py
+│   │   └── repository.py
 │   ├── services/
 │   │   ├── __init__.py
 │   │   └── sensor_service.py
@@ -56,8 +87,10 @@ pushan/
 │   ├── irrigation_engine.py
 │   ├── models.py
 │   └── operational_engine.py
+├── data/
+│   └── pushan.db              created when the demo runs
 ├── tests/
-│   ├── __init__.py
+│   ├── test_database.py
 │   ├── test_irrigation_engine.py
 │   ├── test_operational_engine.py
 │   └── test_sensor_service.py
@@ -68,31 +101,20 @@ pushan/
 
 ## Requirements and usage
 
-Python 3.11 or newer. No third-party packages are required.
+Python 3.11 or newer. V0.3 uses only the Python standard library.
 
 ```powershell
 python main.py
 python -m unittest discover -s tests
 ```
 
-## FIELD_001 demonstration
+Running the demo processes `FIELD_001`, saves all three record types, and shows
+up to three recent entries from each history. Repeated runs demonstrate that
+the records persist in `data/pushan.db`.
 
-FIELD_001 has dry soil, a healthy sensor, sufficient stored water, and an
-offline pump. For a 1,000 m² tomato field, the engine recommends 6,325 L after
-high-temperature and low-humidity adjustments. The operational engine blocks
-execution and returns `MAINTENANCE_REQUIRED` because the pump is offline.
+## Limitations and possible V0.4 direction
 
-## Simulated fields
-
-- `FIELD_001`: dry soil, healthy sensor, offline pump.
-- `FIELD_002`: sufficient tomato soil moisture, healthy sensor, online pump.
-- `FIELD_003`: dry soil, healthy sensor, online pump, insufficient stored water
-  for a 1,000 m² tomato field.
-
-## Limitations and possible V0.3 direction
-
-V0.2 has fixed simulated values, no reading history, no persistence, and no
-real device communication. A logical V0.3 could add timestamped readings,
-configurable field profiles, and historical storage while retaining the same
-engine boundaries. AI/ML should be considered only when sufficient trustworthy
-data and a clearly defined prediction problem exist.
+V0.3 uses fixed sensor simulations and has no real device integration, web API,
+dashboard, analytics, or AI. A logical V0.4 could add a small service layer for
+field registration and historical summaries, plus controlled schema migrations
+and retention rules. Those features are intentionally outside V0.3.

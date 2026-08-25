@@ -1,1 +1,1 @@
-# V0.2 uses only the Python standard library.
+# V0.3 uses only the Python standard library.

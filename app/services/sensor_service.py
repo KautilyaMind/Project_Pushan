@@ -36,6 +36,25 @@ SIMULATED_SENSOR_DATA: dict[str, SensorReading] = {
     ),
 }
 
+# Field metadata lives here beside the simulated fields so it has one source.
+FIELD_CONFIGURATIONS: dict[str, dict[str, str | float]] = {
+    "FIELD_001": {
+        "crop": "tomato",
+        "crop_stage": "flowering",
+        "field_area_m2": 1000,
+    },
+    "FIELD_002": {
+        "crop": "tomato",
+        "crop_stage": "fruiting",
+        "field_area_m2": 800,
+    },
+    "FIELD_003": {
+        "crop": "tomato",
+        "crop_stage": "flowering",
+        "field_area_m2": 1000,
+    },
+}
+
 
 def get_latest_reading(field_id: str) -> SensorReading:
     """Return the latest simulated reading for a supported field ID."""

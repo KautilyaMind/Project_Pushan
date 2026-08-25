@@ -1,135 +1,225 @@
-# Pushan — The Next-Gen AI Agriculture Engine (V0.4)
+# Pushan — The Next-Gen AI Agriculture Engine (V0.5)
 
-Pushan is a smart agriculture process-intelligence prototype. V0.4 introduces
-a supervised machine-learning regression pipeline that estimates irrigation
-water demand while retaining the deterministic rule and operational engines.
+Pushan is a prototype irrigation process-intelligence platform. V0.5 exposes
+its existing rule, machine-learning, operational, and persistence capabilities
+through a validated FastAPI service while preserving the command-line demo.
 
-The ML output is advisory. It never directly controls irrigation hardware, and
-this prototype is not a validated agronomic production model.
+V0.5 turns Pushan's internal Python capabilities into reusable HTTP services
+that can be consumed by future dashboards, mobile applications, automation
+systems, AI agents, or other enterprise software.
 
 ## Project evolution
 
 ```text
 V0.1  Rule-Based Irrigation Engine
 V0.2  Sensor Simulation + Operational Feasibility
-V0.3  SQLite Persistence + Historical Memory
+V0.3  SQLite Persistence + Historical Records
 V0.4  Machine-Learning Irrigation Prediction
+V0.5  FastAPI Service Layer
 ```
 
-## V0.4 architecture
+## Architecture
 
 ```text
-                         FarmInput
-                            ↓
-             ┌──────────────┴──────────────┐
-             ↓                             ↓
-    Rule-Based Engine               Trained ML Pipeline
-             ↓                             ↓
-    Primary recommendation           Advisory prediction
-             └──────────────┬──────────────┘
-                            ↓
-                     Comparison display
-                            ↓
-                   Operational Engine
-                            ↓
-                       Final action
+Client / Browser / Future UI
+              ↓
+       FastAPI routes + schemas
+              ↓
+       Assessment service
+              ↓
+ ┌────────────┼─────────────┐
+ ↓            ↓             ↓
+Rules     ML advisory    SQLite history
+ ↓
+Operational feasibility
 ```
 
-The rule engine remains the deterministic safety and business-logic layer. The
-ML model predicts likely water demand. Sensor reliability, pump availability,
-and stored water still determine whether the rule recommendation can execute.
+The irrigation engine contains business logic. FastAPI only exposes that logic
+to external consumers. Routes validate HTTP input, call reusable services, and
+format responses; they do not reimplement irrigation calculations.
 
-## Synthetic training data
+The ML model remains advisory and never controls pumps. The deterministic rule
+recommendation and operational constraints remain authoritative.
 
-V0.4 does not have years of real farm history, so it generates at least 1,000
-deterministic synthetic rows using a fixed random seed. **These rows are
-prototype examples, not real agricultural observations.**
+## Installation
 
-Features include soil moisture, temperature, humidity, rain probability, field
-area, crop, and crop stage. The target formula combines crop water rates with a
-moisture-deficit factor, temperature, humidity, rainfall, crop stage, and small
-controlled noise. This is richer than simply copying the V0.1 rules but remains
-transparent and reproducible.
-
-```text
-Synthetic Data
-      ↓
-Train/Test Split
-      ↓
-Pipeline preprocessing (training portion only)
-      ↓
-Linear Regression + Random Forest training
-      ↓
-MAE, RMSE, and R² evaluation
-      ↓
-Save the better complete pipeline
-      ↓
-New FarmInput → advisory prediction
-```
-
-The split occurs before preprocessing is fitted. This prevents information from
-the test set leaking into model training.
-
-## Training versus inference
-
-**Training** means learning patterns from historical examples. The training
-command generates data, splits it, fits both models, evaluates them, and saves
-the better complete pipeline.
-
-**Inference** means loading that saved pipeline and using it to predict water
-for one new farm condition. `main.py` performs inference; it does not silently
-retrain the model.
-
-## Train the model
-
-Install the three direct dependencies and run training:
+Python 3.11 or newer is required.
 
 ```powershell
 python -m pip install -r requirements.txt
+```
+
+V0.5 directly depends on scikit-learn, pandas, joblib, FastAPI, Uvicorn,
+Pydantic, and HTTPX.
+
+## Train the model
+
+The model must be trained before running ML-backed API requests:
+
+```powershell
 python -m app.ml.train
 ```
 
-Training creates local generated artifacts:
+This creates 1,000 deterministic **synthetic** training examples and evaluates
+Linear Regression and Random Forest. The better complete preprocessing/model
+pipeline is saved locally to `artifacts/irrigation_model.joblib`.
 
-```text
-data/training_data.csv
-artifacts/irrigation_model.joblib
-```
+The data is for demonstrating the ML pipeline, not validated real agricultural
+data. Generated CSV, model, and SQLite files are ignored by Git.
 
-Both are ignored by Git because they are reproducible build artifacts. If the
-model is missing, the application clearly asks you to run the training command.
+## Run the interfaces
 
-## Run Pushan and its tests
+Command-line demonstration:
 
 ```powershell
 python main.py
+```
+
+FastAPI service:
+
+```powershell
+python -m uvicorn app.main_api:app --reload
+```
+
+After startup:
+
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- OpenAPI JSON: `http://127.0.0.1:8000/openapi.json`
+- Health check: `http://127.0.0.1:8000/health`
+
+## Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/health` | Service status and version |
+| `GET` | `/fields` | Configured field metadata |
+| `GET` | `/fields/{field_id}/sensor` | Current simulated reading |
+| `POST` | `/irrigation/recommend` | Complete persisted assessment |
+| `POST` | `/ml/predict` | Direct advisory ML prediction |
+| `GET` | `/fields/{field_id}/history/sensors` | Recent sensor history |
+| `GET` | `/fields/{field_id}/history/decisions` | Rule-decision history |
+| `GET` | `/fields/{field_id}/history/actions` | Operational-action history |
+
+History endpoints accept `?limit=10`, with values from 1 through 100.
+
+## Sample requests
+
+Health:
+
+```powershell
+curl http://127.0.0.1:8000/health
+```
+
+Complete FIELD_001 assessment:
+
+```powershell
+curl -X POST http://127.0.0.1:8000/irrigation/recommend `
+  -H "Content-Type: application/json" `
+  -d '{"field_id":"FIELD_001","crop":"tomato","crop_stage":"flowering","field_area_m2":1000}'
+```
+
+Direct ML prediction:
+
+```powershell
+curl -X POST http://127.0.0.1:8000/ml/predict `
+  -H "Content-Type: application/json" `
+  -d '{"soil_moisture":20,"temperature":34,"humidity":40,"rain_probability":15,"crop":"tomato","crop_stage":"flowering","field_area_m2":1000}'
+```
+
+Recent sensor history:
+
+```powershell
+curl "http://127.0.0.1:8000/fields/FIELD_001/history/sensors?limit=5"
+```
+
+## Example assessment response
+
+```json
+{
+  "field_id": "FIELD_001",
+  "sensor": {
+    "field_id": "FIELD_001",
+    "soil_moisture": 18,
+    "temperature": 36,
+    "humidity": 32,
+    "rain_probability": 10,
+    "pump_status": "OFFLINE",
+    "water_available_litres": 10000,
+    "sensor_status": "HEALTHY"
+  },
+  "rule_based": {
+    "irrigation_required": true,
+    "recommended_water_litres": 6325,
+    "risk_level": "MEDIUM",
+    "reason": "Soil moisture is below the target threshold."
+  },
+  "ml": {
+    "predicted_water_litres": 3039.66,
+    "model_version": "v0.4"
+  },
+  "comparison": {
+    "absolute_difference_litres": 3285.34,
+    "difference_percentage": 51.94
+  },
+  "operational": {
+    "execution_possible": false,
+    "action_required": "MAINTENANCE_REQUIRED",
+    "reason": "The field requires irrigation, but the pump is offline."
+  }
+}
+```
+
+Exact ML values depend on the trained artifact.
+
+## Validation and errors
+
+Pydantic validates external percentages and positive field areas before they
+reach domain code. The API uses consistent status codes:
+
+- `200`: successful request
+- `404`: unknown field
+- `422`: invalid request body or query parameter
+- `503`: trained ML model unavailable
+- `500`: unexpected internal error with no stack trace exposed to the client
+
+## Project structure
+
+```text
+Project_Pushan/
+├── app/
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── routes.py
+│   │   └── schemas.py
+│   ├── database/
+│   ├── ml/
+│   ├── services/
+│   │   ├── assessment_service.py
+│   │   └── sensor_service.py
+│   ├── irrigation_engine.py
+│   ├── main_api.py
+│   ├── models.py
+│   └── operational_engine.py
+├── tests/
+│   └── test_api.py
+├── main.py
+├── README.md
+└── requirements.txt
+```
+
+## Testing
+
+```powershell
 python -m unittest discover -s tests
 ```
 
-The FIELD_001 demonstration displays its current sensors, the rule-based water
-recommendation, the ML advisory estimate, their absolute and percentage
-difference, and the final operational action. V0.3 SQLite history continues to
-store the sensor reading, deterministic recommendation, and operational action.
+API tests use a temporary SQLite database and a small temporary trained model.
+They do not modify development history or require the production model artifact.
 
-## ML modules
+## Limitations and possible V0.6 direction
 
-- `app/ml/data_generator.py`: creates and saves reproducible synthetic data.
-- `app/ml/train.py`: builds preprocessing, trains both regressors, evaluates
-  them, selects the better model by RMSE then MAE, and saves the pipeline.
-- `app/ml/predict.py`: loads the saved pipeline and predicts non-negative litres.
-- `tests/test_ml.py`: tests data, training, persistence, prediction, and backward
-  compatibility using a smaller temporary model.
-
-## Existing persistence
-
-V0.3 functionality remains: `fields`, `sensor_readings`,
-`irrigation_decisions`, and `operational_actions` are stored in SQLite. The ML
-estimate is currently a displayed advisory rather than a persisted action.
-
-## Limitations and possible V0.5 direction
-
-The model learns from synthetic data, so its metrics measure performance on the
-same synthetic relationship—not real-world agronomic validity. It must not
-operate pumps directly. A logical V0.5 could introduce versioned model metadata,
-prediction logging and monitoring, and evaluation against carefully governed
-real observations before any production use. No V0.5 features are included.
+V0.5 uses deterministic simulated sensors, synthetic ML training data, and local
+SQLite persistence. It has no authentication, real IoT connection, production
+deployment, or user interface. A logical V0.6 could add API authentication,
+request correlation, prediction logging/model version records, and production
+configuration management. No V0.6 features are included.

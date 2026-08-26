@@ -1,4 +1,4 @@
-"""Core package for Pushan V0.7."""
+"""Core package for Pushan V0.8."""
 
 from .irrigation_engine import CROP_REQUIREMENTS, calculate_irrigation
 from .models import (

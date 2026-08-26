@@ -8,6 +8,7 @@ import httpx
 
 DEFAULT_API_URL = "http://127.0.0.1:8000"
 DEFAULT_TIMEOUT_SECONDS = 5.0
+AI_TIMEOUT_SECONDS = 60.0
 
 
 class PushanAPIError(Exception):
@@ -78,7 +79,23 @@ def get_action_history(field_id: str, limit: int = 10) -> list[dict[str, Any]]:
 def ask_knowledge(question: str) -> dict[str, Any]:
     """Ask the backend knowledge service; the frontend never imports RAG code."""
     return _expect_dictionary(
-        _request("POST", "/knowledge/ask", json_body={"question": question})
+        _request(
+            "POST", "/knowledge/ask", json_body={"question": question},
+            timeout_seconds=AI_TIMEOUT_SECONDS,
+        )
+    )
+
+
+def run_agent(message: str, field_id: str | None = None) -> dict[str, Any]:
+    """Run the controlled backend agent workflow."""
+    payload: dict[str, Any] = {"message": message}
+    if field_id:
+        payload["field_id"] = field_id
+    return _expect_dictionary(
+        _request(
+            "POST", "/agent/run", json_body=payload,
+            timeout_seconds=AI_TIMEOUT_SECONDS,
+        )
     )
 
 
@@ -101,6 +118,7 @@ def _request(
     *,
     json_body: dict[str, Any] | None = None,
     query_parameters: dict[str, Any] | None = None,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> Any:
     """Perform one bounded request and convert failures to display-safe errors."""
     try:
@@ -109,7 +127,7 @@ def _request(
             f"{get_api_base_url()}{path}",
             json=json_body,
             params=query_parameters,
-            timeout=DEFAULT_TIMEOUT_SECONDS,
+            timeout=timeout_seconds,
         )
         response.raise_for_status()
     except httpx.TimeoutException as error:

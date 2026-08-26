@@ -3,6 +3,7 @@
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
+from app.agents.agent_service import run_pushan_agent
 
 from app.database.repository import (
     get_action_history,
@@ -11,11 +12,13 @@ from app.database.repository import (
 )
 from app.ml.predict import predict_water_requirement
 from app.models import FarmInput
-from app.rag.qa_service import LLMNotConfiguredError, answer_question
+from app.rag.qa_service import LLMNotConfiguredError, RAGGenerationError, answer_question
 from app.services.assessment_service import build_irrigation_assessment
 from app.services.sensor_service import FIELD_CONFIGURATIONS, get_latest_reading
 
 from .schemas import (
+    AgentRunRequest,
+    AgentRunResponse,
     ComparisonResponse,
     DirectPredictionRequest,
     FarmRecommendationRequest,
@@ -34,6 +37,18 @@ from .schemas import (
 router = APIRouter()
 
 
+@router.post("/agent/run", response_model=AgentRunResponse, tags=["Agent"])
+def run_agent(payload: AgentRunRequest, request: Request) -> AgentRunResponse:
+    """Run the controlled LangGraph workflow through its service boundary."""
+    result = run_pushan_agent(
+        payload.message,
+        payload.field_id,
+        model_path=request.app.state.model_path,
+        vector_store_path=request.app.state.vector_store_path,
+    )
+    return AgentRunResponse(**result.__dict__)
+
+
 @router.post(
     "/knowledge/ask",
     response_model=KnowledgeAnswerResponse,
@@ -49,7 +64,7 @@ def ask_knowledge(
             payload.question,
             persist_path=request.app.state.vector_store_path,
         )
-    except (FileNotFoundError, LLMNotConfiguredError) as error:
+    except (FileNotFoundError, LLMNotConfiguredError, RAGGenerationError) as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     return KnowledgeAnswerResponse(answer=result.answer, sources=result.sources)
 
@@ -57,7 +72,7 @@ def ask_knowledge(
 @router.get("/health", response_model=HealthResponse, tags=["Service"])
 def health() -> HealthResponse:
     """Report service availability without touching ML or SQLite."""
-    return HealthResponse(status="ok", service="Pushan", version="0.7")
+    return HealthResponse(status="ok", service="Pushan", version="0.8")
 
 
 @router.get("/fields", response_model=list[FieldResponse], tags=["Fields"])

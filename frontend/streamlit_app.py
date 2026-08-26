@@ -8,6 +8,7 @@ import streamlit as st
 from frontend.api_client import (
     PushanAPIError,
     ask_knowledge,
+    run_agent,
     check_health,
     get_action_history,
     get_decision_history,
@@ -184,6 +185,39 @@ def render_knowledge_assistant() -> None:
                 st.error(f"Knowledge request unavailable: {error}")
 
 
+def render_pushan_agent() -> None:
+    """Render controlled LangGraph orchestration through FastAPI."""
+    st.divider()
+    st.header("Pushan Agent")
+    st.write("Coordinate field assessment and agriculture knowledge in one controlled workflow.")
+    message = st.text_area(
+        "Agent request",
+        placeholder="Analyse FIELD_001 and explain whether irrigation should run.",
+        key="agent_request",
+    )
+    if st.button("Run Agent", type="primary"):
+        if not message.strip():
+            st.warning("Please enter an agent request.")
+            return
+        try:
+            with st.spinner("Running Pushan's controlled workflow..."):
+                response = run_agent(message.strip())
+            st.subheader("Final Answer")
+            st.write(response["answer"])
+            st.caption(f"Intent: {response['intent']}")
+            with st.expander("Execution Trace"):
+                for index, step in enumerate(response.get("execution_trace", []), 1):
+                    st.write(f"{index}. {step}")
+            if response.get("sources"):
+                st.subheader("Sources")
+                for source in response["sources"]:
+                    st.markdown(f"- `{source}`")
+            if response.get("errors"):
+                st.warning("\n".join(response["errors"]))
+        except (PushanAPIError, KeyError, TypeError) as error:
+            st.error(f"Agent request unavailable: {error}")
+
+
 def run_dashboard() -> None:
     """Load backend data and render the complete dashboard."""
     st.title("Pushan — The Next-Gen AI Agriculture Engine")
@@ -253,6 +287,7 @@ def run_dashboard() -> None:
             action_records = get_action_history(selected_field_id, history_limit)
         render_history(sensor_records, decision_records, action_records)
         render_knowledge_assistant()
+        render_pushan_agent()
     except (PushanAPIError, KeyError, TypeError, ValueError) as error:
         st.error(f"The dashboard could not load field data: {error}")
         st.info("Check the backend status and use Refresh Data to try again.")

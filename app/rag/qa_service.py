@@ -26,6 +26,10 @@ class LLMNotConfiguredError(RuntimeError):
     """The retrieval layer works, but grounded generation lacks credentials."""
 
 
+class RAGGenerationError(RuntimeError):
+    """Gemini could not complete a bounded grounded-generation request."""
+
+
 @dataclass(frozen=True)
 class RAGResponse:
     answer: str
@@ -45,6 +49,8 @@ def get_llm() -> ChatGoogleGenerativeAI:
     return ChatGoogleGenerativeAI(
         model=os.getenv("PUSHAN_LLM_MODEL", DEFAULT_LLM_MODEL),
         google_api_key=os.environ["GOOGLE_API_KEY"],
+        retries=1,
+        request_timeout=30,
     )
 
 
@@ -66,7 +72,14 @@ def answer_question(
         [("system", SYSTEM_PROMPT), ("human", "Context:\n{context}\n\nQuestion:\n{question}")]
     )
     model = llm if llm is not None else get_llm()
-    result = model.invoke(prompt.format_messages(context=context, question=question.strip()))
+    try:
+        result = model.invoke(
+            prompt.format_messages(context=context, question=question.strip())
+        )
+    except Exception as error:
+        raise RAGGenerationError(
+            "Knowledge generation could not reach the configured Gemini service."
+        ) from error
     answer = _response_text(result)
     return RAGResponse(answer=answer, sources=sources, retrieved_chunks=[c.page_content for c in chunks])
 

@@ -89,3 +89,17 @@ class KnowledgeQuestionRequest(BaseModel):
 class KnowledgeAnswerResponse(BaseModel):
     answer: str
     sources: list[str]
+
+
+class AgentRunRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2000, pattern=r".*\S.*")
+    field_id: str | None = Field(default=None, min_length=1)
+
+
+class AgentRunResponse(BaseModel):
+    intent: str
+    answer: str
+    execution_trace: list[str]
+    sources: list[str]
+    errors: list[str]
+    structured_results: dict

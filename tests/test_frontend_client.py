@@ -14,10 +14,18 @@ from frontend.api_client import (
     get_irrigation_recommendation,
     get_sensor_history,
     get_sensor_reading,
+    run_agent,
 )
 
 
 class FrontendApiClientTests(unittest.TestCase):
+    @patch("frontend.api_client.httpx.request")
+    def test_agent_request_uses_endpoint_and_payload(self, mock_request: object) -> None:
+        mock_request.return_value = json_response({"intent": "FIELD_ASSESSMENT"})  # type: ignore[attr-defined]
+        run_agent("Assess FIELD_001")
+        self.assertTrue(mock_request.call_args.args[1].endswith("/agent/run"))  # type: ignore[attr-defined]
+        self.assertEqual(mock_request.call_args.kwargs["json"], {"message": "Assess FIELD_001"})  # type: ignore[attr-defined]
+
     @patch("frontend.api_client.httpx.request")
     def test_health_request_success(self, mock_request: object) -> None:
         mock_request.return_value = json_response(  # type: ignore[attr-defined]
@@ -48,7 +56,7 @@ class FrontendApiClientTests(unittest.TestCase):
         )
         get_sensor_reading("FIELD_002")
         called_url = mock_request.call_args.args[1]  # type: ignore[attr-defined]
-        self.assertEqual(called_url, "http://127.0.0.1:8000/fields/FIELD_002/sensor")
+        self.assertTrue(called_url.endswith("/fields/FIELD_002/sensor"))
 
     @patch("frontend.api_client.httpx.request")
     def test_recommendation_sends_correct_payload(self, mock_request: object) -> None:

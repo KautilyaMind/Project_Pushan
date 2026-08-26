@@ -78,3 +78,14 @@ class IrrigationAssessmentResponse(BaseModel):
     ml: MLPredictionResponse
     comparison: ComparisonResponse
     operational: OperationalResponse
+
+
+class KnowledgeQuestionRequest(BaseModel):
+    """A non-blank agriculture question for the grounded knowledge service."""
+
+    question: str = Field(min_length=1, max_length=1000, pattern=r".*\S.*")
+
+
+class KnowledgeAnswerResponse(BaseModel):
+    answer: str
+    sources: list[str]

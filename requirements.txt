@@ -7,3 +7,9 @@ uvicorn
 pydantic
 httpx
 streamlit
+langchain-core
+langchain-text-splitters
+langchain-chroma
+chromadb
+langchain-google-genai
+python-dotenv

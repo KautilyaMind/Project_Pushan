@@ -75,6 +75,13 @@ def get_action_history(field_id: str, limit: int = 10) -> list[dict[str, Any]]:
     return _history_request(field_id, "actions", limit)
 
 
+def ask_knowledge(question: str) -> dict[str, Any]:
+    """Ask the backend knowledge service; the frontend never imports RAG code."""
+    return _expect_dictionary(
+        _request("POST", "/knowledge/ask", json_body={"question": question})
+    )
+
+
 def _history_request(
     field_id: str,
     history_type: str,

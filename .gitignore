@@ -4,6 +4,7 @@ __pycache__/
 venv/
 .env
 .env.*
+!.env.example
 .pytest_cache/
 .vscode/
 .idea/
@@ -11,3 +12,4 @@ venv/
 data/*.db
 data/training_data.csv
 artifacts/*.joblib
+artifacts/vector_store/

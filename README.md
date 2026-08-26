@@ -1,12 +1,6 @@
-# Pushan — The Next-Gen AI Agriculture Engine (V0.5)
+# Pushan — The Next-Gen AI Agriculture Engine (V0.7)
 
-Pushan is a prototype irrigation process-intelligence platform. V0.5 exposes
-its existing rule, machine-learning, operational, and persistence capabilities
-through a validated FastAPI service while preserving the command-line demo.
-
-V0.5 turns Pushan's internal Python capabilities into reusable HTTP services
-that can be consumed by future dashboards, mobile applications, automation
-systems, AI agents, or other enterprise software.
+Pushan is a prototype smart-irrigation process-intelligence platform. V0.7 adds a retrieval-augmented generation (RAG) knowledge assistant while preserving the existing sensor, rule, ML, operational, SQLite, API, and dashboard layers.
 
 ## Project evolution
 
@@ -15,211 +9,118 @@ V0.1  Rule-Based Irrigation Engine
 V0.2  Sensor Simulation + Operational Feasibility
 V0.3  SQLite Persistence + Historical Records
 V0.4  Machine-Learning Irrigation Prediction
-V0.5  FastAPI Service Layer
+V0.5  FastAPI Backend
+V0.6  Streamlit Dashboard
+V0.7  RAG Agriculture Knowledge System
 ```
 
-## Architecture
+RAG allows Pushan to search its own agriculture documents before asking an LLM to generate an answer. This reduces reliance on model memory and makes answers traceable to the project's knowledge base.
+
+## Architecture and responsibilities
 
 ```text
-Client / Browser / Future UI
-              ↓
-       FastAPI routes + schemas
-              ↓
-       Assessment service
-              ↓
- ┌────────────┼─────────────┐
- ↓            ↓             ↓
-Rules     ML advisory    SQLite history
- ↓
-Operational feasibility
+User Question → Streamlit → FastAPI → RAG Service → Retriever
+     → Chroma Vector Store → Relevant Chunks → LLM
+     → Grounded Answer + Source Filenames
 ```
 
-The irrigation engine contains business logic. FastAPI only exposes that logic
-to external consumers. Routes validate HTTP input, call reusable services, and
-format responses; they do not reimplement irrigation calculations.
+The RAG path complements—never replaces—the operational path:
 
-The ML model remains advisory and never controls pumps. The deterministic rule
-recommendation and operational constraints remain authoritative.
+- **RAG:** knowledge and explanation only.
+- **ML:** predictive advisory only.
+- **Rule engine:** deterministic irrigation recommendation.
+- **Operational engine:** execution feasibility and safety state.
 
-## Installation
+The knowledge assistant cannot switch a pump or override operational rules. Streamlit calls FastAPI; it never imports backend RAG or irrigation logic directly.
+
+## RAG concepts in plain English
+
+- **Chunking:** breaking documents into small overlapping passages. V0.7 uses 800 characters with 100 overlap and preserves source metadata.
+- **Embeddings:** numerical text representations used to find related wording. V0.7 uses deterministic local hash embeddings, so retrieval needs no paid API.
+- **Vector database:** Chroma stores chunk vectors and metadata for similarity search.
+- **Retrieval:** selecting the chunks most relevant to the question before generation.
+- **Generation:** a Google Gemini model turns only the retrieved passages into a readable answer.
+- **Grounding:** requiring the model to use supplied context, admit insufficient information, and return source filenames.
+
+The local embedding is lightweight and test-friendly. A production semantic embedding provider can later replace only `app/rag/embeddings.py`.
+
+## Install and configure
 
 Python 3.11 or newer is required.
 
 ```powershell
 python -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-V0.5 directly depends on scikit-learn, pandas, joblib, FastAPI, Uvicorn,
-Pydantic, and HTTPX.
+Edit `.env` locally:
 
-## Train the model
+```text
+GOOGLE_API_KEY=your_key_here
+PUSHAN_LLM_MODEL=gemini-3.1-flash-lite
+PUSHAN_API_URL=http://127.0.0.1:8000
+```
 
-The model must be trained before running ML-backed API requests:
+`.env` is ignored by Git. Never commit or paste real keys into source, tests, logs, screenshots, issues, or chat. Retrieval and tests work without a key; only live generation needs one. Pushan uses Gemini 3.1 Flash-Lite for high-volume, cost-efficient generation while keeping embeddings local so indexing and retrieval consume no Gemini quota. Google's free-tier terms currently state that submitted content may be used to improve its products; do not submit sensitive farm or personal data without reviewing the applicable terms.
+
+## Build the knowledge index
+
+Run after installation and whenever a knowledge document changes:
+
+```powershell
+python -m app.rag.vector_store
+```
+
+This loads `knowledge/*.md`, chunks and embeds them locally, and persists Chroma under `artifacts/vector_store/`. Questions never silently rebuild the index.
+
+## Train and run
+
+Train the advisory model once:
 
 ```powershell
 python -m app.ml.train
 ```
 
-This creates 1,000 deterministic **synthetic** training examples and evaluates
-Linear Regression and Random Forest. The better complete preprocessing/model
-pipeline is saved locally to `artifacts/irrigation_model.joblib`.
-
-The data is for demonstrating the ML pipeline, not validated real agricultural
-data. Generated CSV, model, and SQLite files are ignored by Git.
-
-## Run the interfaces
-
-Command-line demonstration:
+Then use two terminals:
 
 ```powershell
-python main.py
-```
-
-FastAPI service:
-
-```powershell
+# Terminal 1
 python -m uvicorn app.main_api:app --reload
+
+# Terminal 2
+python -m streamlit run frontend/streamlit_app.py
 ```
 
-After startup:
-
-- Swagger UI: `http://127.0.0.1:8000/docs`
-- OpenAPI JSON: `http://127.0.0.1:8000/openapi.json`
-- Health check: `http://127.0.0.1:8000/health`
-
-## Endpoints
-
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/health` | Service status and version |
-| `GET` | `/fields` | Configured field metadata |
-| `GET` | `/fields/{field_id}/sensor` | Current simulated reading |
-| `POST` | `/irrigation/recommend` | Complete persisted assessment |
-| `POST` | `/ml/predict` | Direct advisory ML prediction |
-| `GET` | `/fields/{field_id}/history/sensors` | Recent sensor history |
-| `GET` | `/fields/{field_id}/history/decisions` | Rule-decision history |
-| `GET` | `/fields/{field_id}/history/actions` | Operational-action history |
-
-History endpoints accept `?limit=10`, with values from 1 through 100.
-
-## Sample requests
-
-Health:
-
-```powershell
-curl http://127.0.0.1:8000/health
-```
-
-Complete FIELD_001 assessment:
-
-```powershell
-curl -X POST http://127.0.0.1:8000/irrigation/recommend `
-  -H "Content-Type: application/json" `
-  -d '{"field_id":"FIELD_001","crop":"tomato","crop_stage":"flowering","field_area_m2":1000}'
-```
-
-Direct ML prediction:
-
-```powershell
-curl -X POST http://127.0.0.1:8000/ml/predict `
-  -H "Content-Type: application/json" `
-  -d '{"soil_moisture":20,"temperature":34,"humidity":40,"rain_probability":15,"crop":"tomato","crop_stage":"flowering","field_area_m2":1000}'
-```
-
-Recent sensor history:
-
-```powershell
-curl "http://127.0.0.1:8000/fields/FIELD_001/history/sensors?limit=5"
-```
-
-## Example assessment response
-
-```json
-{
-  "field_id": "FIELD_001",
-  "sensor": {
-    "field_id": "FIELD_001",
-    "soil_moisture": 18,
-    "temperature": 36,
-    "humidity": 32,
-    "rain_probability": 10,
-    "pump_status": "OFFLINE",
-    "water_available_litres": 10000,
-    "sensor_status": "HEALTHY"
-  },
-  "rule_based": {
-    "irrigation_required": true,
-    "recommended_water_litres": 6325,
-    "risk_level": "MEDIUM",
-    "reason": "Soil moisture is below the target threshold."
-  },
-  "ml": {
-    "predicted_water_litres": 3039.66,
-    "model_version": "v0.4"
-  },
-  "comparison": {
-    "absolute_difference_litres": 3285.34,
-    "difference_percentage": 51.94
-  },
-  "operational": {
-    "execution_possible": false,
-    "action_required": "MAINTENANCE_REQUIRED",
-    "reason": "The field requires irrigation, but the pump is offline."
-  }
-}
-```
-
-Exact ML values depend on the trained artifact.
-
-## Validation and errors
-
-Pydantic validates external percentages and positive field areas before they
-reach domain code. The API uses consistent status codes:
-
-- `200`: successful request
-- `404`: unknown field
-- `422`: invalid request body or query parameter
-- `503`: trained ML model unavailable
-- `500`: unexpected internal error with no stack trace exposed to the client
+Open `http://localhost:8501`. API health is at `http://127.0.0.1:8000/health`, Swagger at `/docs`, and the knowledge route is `POST /knowledge/ask`.
 
 ## Project structure
 
 ```text
 Project_Pushan/
 ├── app/
-│   ├── api/
-│   │   ├── __init__.py
-│   │   ├── routes.py
-│   │   └── schemas.py
-│   ├── database/
-│   ├── ml/
-│   ├── services/
-│   │   ├── assessment_service.py
-│   │   └── sensor_service.py
-│   ├── irrigation_engine.py
-│   ├── main_api.py
-│   ├── models.py
-│   └── operational_engine.py
-├── tests/
-│   └── test_api.py
-├── main.py
-├── README.md
-└── requirements.txt
+│   ├── api/  database/  ml/  services/
+│   └── rag/
+│       ├── loader.py  chunking.py  embeddings.py
+│       └── vector_store.py  retriever.py  qa_service.py
+├── knowledge/
+│   ├── irrigation_basics.md  tomato_irrigation.md
+│   ├── rice_irrigation.md  cotton_irrigation.md
+│   └── drip_irrigation_sop.md
+├── artifacts/vector_store/       # generated, ignored
+├── frontend/  tests/
+├── .env.example  README.md  requirements.txt
 ```
 
-## Testing
+Every knowledge document is labeled as a prototype and ends with authoritative sources. It is educational and requires local agronomic validation.
+
+## Tests
 
 ```powershell
 python -m unittest discover -s tests
 ```
 
-API tests use a temporary SQLite database and a small temporary trained model.
-They do not modify development history or require the production model artifact.
+The suite uses local embeddings and a mocked LLM, so it makes no live paid model call. It verifies loading, metadata, chunking, persistence, retrieval, source deduplication, controlled failures, API/UI integration, and V0.1–V0.6 behaviour.
 
-## Limitations and possible V0.6 direction
+## V0.7 boundary
 
-V0.5 uses deterministic simulated sensors, synthetic ML training data, and local
-SQLite persistence. It has no authentication, real IoT connection, production
-deployment, or user interface. A logical V0.6 could add API authentication,
-request correlation, prediction logging/model version records, and production
-configuration management. No V0.6 features are included.
+V0.7 remains local and prototype-grade. It has no LangGraph, multi-agent orchestration, Power Automate, Docker, cloud deployment, or real IoT control. Its modular retrieval pipeline prepares a clean knowledge capability for future orchestration without implementing V0.8.

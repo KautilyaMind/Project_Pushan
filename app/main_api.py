@@ -1,4 +1,4 @@
-"""FastAPI application entry point for Pushan V0.5."""
+"""FastAPI application entry point for Pushan V0.7."""
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes import router
 from app.database.db import DEFAULT_DATABASE_PATH, DatabasePath, initialize_database
 from app.ml.train import DEFAULT_MODEL_PATH
+from app.rag.vector_store import DEFAULT_VECTOR_STORE_PATH
 
 
 logging.basicConfig(level=logging.INFO)
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 def create_app(
     database_path: DatabasePath = DEFAULT_DATABASE_PATH,
     model_path: str | Path = DEFAULT_MODEL_PATH,
+    vector_store_path: str | Path = DEFAULT_VECTOR_STORE_PATH,
 ) -> FastAPI:
     """Create a configurable API application for production or isolated tests."""
 
@@ -32,12 +34,13 @@ def create_app(
 
     api_app = FastAPI(
         title="Pushan — The Next-Gen AI Agriculture Engine",
-        version="0.5",
+        version="0.7",
         description="Prototype AI-enabled irrigation process intelligence platform.",
         lifespan=lifespan,
     )
     api_app.state.database_path = database_path
     api_app.state.model_path = model_path
+    api_app.state.vector_store_path = vector_store_path
     api_app.include_router(router)
 
     @api_app.exception_handler(Exception)

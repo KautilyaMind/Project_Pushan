@@ -1,4 +1,4 @@
-"""API-driven operations dashboard for Pushan V0.6."""
+"""API-driven operations and knowledge dashboard for Pushan V0.7."""
 
 from typing import Any
 
@@ -7,6 +7,7 @@ import streamlit as st
 
 from frontend.api_client import (
     PushanAPIError,
+    ask_knowledge,
     check_health,
     get_action_history,
     get_decision_history,
@@ -158,6 +159,31 @@ def render_history(
             st.info("No operational action history is available yet.")
 
 
+def render_knowledge_assistant() -> None:
+    """Render an API-only interface to Pushan's grounded knowledge service."""
+    st.divider()
+    st.header("Knowledge Assistant")
+    st.write("Ask Pushan about irrigation, crop water requirements, or operating procedures.")
+    question = st.text_area(
+        "Your agriculture question",
+        placeholder="What should I check before starting drip irrigation?",
+    )
+    if st.button("Ask Pushan", type="primary"):
+        if not question.strip():
+            st.warning("Please enter a question.")
+        else:
+            try:
+                with st.spinner("Searching Pushan's knowledge base..."):
+                    response = ask_knowledge(question.strip())
+                st.subheader("Answer")
+                st.write(response["answer"])
+                st.subheader("Sources")
+                for source in response.get("sources", []):
+                    st.markdown(f"- `{source}`")
+            except (PushanAPIError, KeyError, TypeError) as error:
+                st.error(f"Knowledge request unavailable: {error}")
+
+
 def run_dashboard() -> None:
     """Load backend data and render the complete dashboard."""
     st.title("Pushan — The Next-Gen AI Agriculture Engine")
@@ -226,6 +252,7 @@ def run_dashboard() -> None:
             decision_records = get_decision_history(selected_field_id, history_limit)
             action_records = get_action_history(selected_field_id, history_limit)
         render_history(sensor_records, decision_records, action_records)
+        render_knowledge_assistant()
     except (PushanAPIError, KeyError, TypeError, ValueError) as error:
         st.error(f"The dashboard could not load field data: {error}")
         st.info("Check the backend status and use Refresh Data to try again.")

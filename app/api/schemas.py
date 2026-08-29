@@ -103,3 +103,15 @@ class AgentRunResponse(BaseModel):
     sources: list[str]
     errors: list[str]
     structured_results: dict
+    workflow_id: str | None = None
+    workflow_status: str | None = None
+    approval_request_id: str | None = None
+    approval_required: bool = False
+    technically_executable: bool | None = None
+    authorized_to_execute: bool | None = None
+
+
+class ApprovalDecisionRequest(BaseModel):
+    approved_by: str | None = Field(default=None, min_length=1)
+    rejected_by: str | None = Field(default=None, min_length=1)
+    note: str = Field(default="", max_length=1000)

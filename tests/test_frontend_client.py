@@ -10,15 +10,40 @@ from frontend.api_client import (
     MalformedResponseError,
     PushanAPIError,
     check_health,
+    approve_request,
+    get_audit_trail,
     get_fields,
     get_irrigation_recommendation,
     get_sensor_history,
     get_sensor_reading,
+    get_pending_approvals,
+    reject_request,
     run_agent,
 )
 
 
 class FrontendApiClientTests(unittest.TestCase):
+    @patch("frontend.api_client.httpx.request")
+    def test_pending_approvals_use_api(self, mock_request: object) -> None:
+        mock_request.return_value = json_response([])  # type: ignore[attr-defined]
+        get_pending_approvals()
+        self.assertTrue(mock_request.call_args.args[1].endswith("/approvals"))  # type: ignore[attr-defined]
+
+    @patch("frontend.api_client.httpx.request")
+    def test_approval_decisions_send_operator_metadata(self, mock_request: object) -> None:
+        mock_request.return_value = json_response({"workflow": {"status": "COMPLETED"}})  # type: ignore[attr-defined]
+        approve_request("APR-1", "operator", "reviewed")
+        self.assertTrue(mock_request.call_args.args[1].endswith("/approvals/APR-1/approve"))  # type: ignore[attr-defined]
+        self.assertEqual(mock_request.call_args.kwargs["json"]["approved_by"], "operator")  # type: ignore[attr-defined]
+        reject_request("APR-2", "operator", "unsafe")
+        self.assertTrue(mock_request.call_args.args[1].endswith("/approvals/APR-2/reject"))  # type: ignore[attr-defined]
+
+    @patch("frontend.api_client.httpx.request")
+    def test_audit_trail_uses_api(self, mock_request: object) -> None:
+        mock_request.return_value = json_response([])  # type: ignore[attr-defined]
+        get_audit_trail()
+        self.assertTrue(mock_request.call_args.args[1].endswith("/audit"))  # type: ignore[attr-defined]
+
     @patch("frontend.api_client.httpx.request")
     def test_agent_request_uses_endpoint_and_payload(self, mock_request: object) -> None:
         mock_request.return_value = json_response({"intent": "FIELD_ASSESSMENT"})  # type: ignore[attr-defined]

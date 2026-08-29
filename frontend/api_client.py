@@ -99,6 +99,38 @@ def run_agent(message: str, field_id: str | None = None) -> dict[str, Any]:
     )
 
 
+def get_pending_approvals() -> list[dict[str, Any]]:
+    """Return approval requests that still need an operator decision."""
+    return _expect_list(_request("GET", "/approvals"))
+
+
+def approve_request(request_id: str, operator: str, note: str = "") -> dict[str, Any]:
+    """Approve and resume one persisted workflow."""
+    return _expect_dictionary(_request(
+        "POST", f"/approvals/{request_id}/approve",
+        json_body={"approved_by": operator, "note": note},
+    ))
+
+
+def reject_request(request_id: str, operator: str, note: str = "") -> dict[str, Any]:
+    """Reject and permanently block one persisted workflow."""
+    return _expect_dictionary(_request(
+        "POST", f"/approvals/{request_id}/reject",
+        json_body={"rejected_by": operator, "note": note},
+    ))
+
+
+def get_incidents(field_id: str | None = None) -> list[dict[str, Any]]:
+    """Return open and historical operational incidents."""
+    params = {"field_id": field_id} if field_id else None
+    return _expect_list(_request("GET", "/incidents", query_parameters=params))
+
+
+def get_audit_trail() -> list[dict[str, Any]]:
+    """Return immutable workflow audit events, newest first."""
+    return _expect_list(_request("GET", "/audit"))
+
+
 def _history_request(
     field_id: str,
     history_type: str,

@@ -1,4 +1,4 @@
-"""FastAPI application entry point for Pushan V0.8."""
+"""FastAPI application entry point for Pushan V0.9."""
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -34,7 +34,7 @@ def create_app(
 
     api_app = FastAPI(
         title="Pushan — The Next-Gen AI Agriculture Engine",
-        version="0.8",
+        version="0.9",
         description="Prototype AI-enabled irrigation process intelligence platform.",
         lifespan=lifespan,
     )

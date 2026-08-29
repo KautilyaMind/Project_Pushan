@@ -71,6 +71,70 @@ def initialize_database(database_path: DatabasePath = DEFAULT_DATABASE_PATH) -> 
                     risk_level TEXT NOT NULL,
                     FOREIGN KEY (field_id) REFERENCES fields(field_id)
                 );
+
+                CREATE TABLE IF NOT EXISTS approval_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    request_id TEXT NOT NULL UNIQUE,
+                    field_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    action_type TEXT NOT NULL,
+                    recommended_water_litres REAL NOT NULL,
+                    risk_level TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    approved_by TEXT,
+                    approved_at TEXT,
+                    rejected_at TEXT,
+                    decision_note TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS workflow_executions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    workflow_id TEXT NOT NULL UNIQUE,
+                    field_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    action_type TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    approval_request_id TEXT,
+                    started_at TEXT,
+                    completed_at TEXT,
+                    failure_reason TEXT,
+                    idempotency_key TEXT NOT NULL UNIQUE
+                );
+
+                CREATE TABLE IF NOT EXISTS incidents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    incident_id TEXT NOT NULL UNIQUE,
+                    field_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    incident_type TEXT NOT NULL,
+                    severity TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    source_workflow_id TEXT NOT NULL UNIQUE
+                );
+
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    notification_id TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL,
+                    recipient TEXT NOT NULL,
+                    subject TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    delivery_status TEXT NOT NULL,
+                    workflow_id TEXT NOT NULL UNIQUE
+                );
+
+                CREATE TABLE IF NOT EXISTS audit_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    field_id TEXT,
+                    actor TEXT NOT NULL,
+                    details TEXT NOT NULL
+                );
                 """
             )
     finally:

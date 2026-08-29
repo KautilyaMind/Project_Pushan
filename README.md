@@ -1,6 +1,6 @@
-# Pushan — The Next-Gen AI Agriculture Engine (V0.8)
+# Pushan — The Next-Gen AI Agriculture Engine (V0.9)
 
-Pushan is a prototype smart-irrigation process-intelligence platform. V0.8 adds controlled LangGraph orchestration while preserving the existing sensor, rule, ML, operational, SQLite, API, dashboard, and RAG layers.
+Pushan is a prototype smart-irrigation process-intelligence platform. V0.9 adds persistent human approval, deterministic guardrails, idempotent workflow automation, incident creation, notifications, and an auditable operator interface. It preserves the V0.1–V0.8 sensor, rule, ML, operational, SQLite, API, dashboard, RAG, and LangGraph layers.
 
 ## Project evolution
 
@@ -13,9 +13,28 @@ V0.5  FastAPI Backend
 V0.6  Streamlit Dashboard
 V0.7  RAG Agriculture Knowledge System
 V0.8  LangGraph Agentic Orchestration
+V0.9  Human Approval + Guardrails + Workflow Automation
 ```
 
-V0.8 converts Pushan's previously independent capabilities into tools coordinated by a stateful LangGraph workflow. The agent determines which capabilities are needed, executes them in a controlled sequence, handles failures, and produces a unified response.
+V0.9 turns recommendations into controlled operational workflows. A technically feasible irrigation recommendation is not automatically authorized: guardrails can require a durable human decision, and a rejected workflow never starts.
+
+## V0.9 safety and automation architecture
+
+```text
+Agent assessment → deterministic guardrails → workflow proposal
+                                              ├─ safe → simulated execution
+                                              ├─ risky → WAITING_FOR_APPROVAL
+                                              │           ├─ approve → execute
+                                              │           └─ reject  → BLOCKED
+                                              └─ fault → incident + notification
+Every transition → SQLite audit log
+```
+
+The approval pause is explicit persisted state rather than an in-memory prompt. `approval_requests` and `workflow_executions` survive API restarts, so an operator can decide later from the Approval Center. This prototype uses no unrestricted autonomous action and never controls physical equipment.
+
+Guardrails are deterministic and run after the operational engine. Faulty sensors, an offline pump, insufficient water, operational blocks, high-risk recommendations, and irrigation volumes above 5,000 litres are handled before authorization. The API response distinguishes `technically_executable` from `authorized_to_execute`.
+
+Workflow proposals carry an idempotency key. Repeating the same proposal reuses its existing record, and repeating a completed execution does not create another incident or notification. Simulated local notification delivery works with no external service. Setting `PUSHAN_AUTOMATION_WEBHOOK_URL` enables a bounded optional JSON webhook; failures are recorded rather than crashing the workflow.
 
 ## V0.8 controlled agent architecture
 
@@ -97,6 +116,7 @@ Edit `.env` locally:
 GOOGLE_API_KEY=your_key_here
 PUSHAN_LLM_MODEL=gemini-3.1-flash-lite
 PUSHAN_API_URL=http://127.0.0.1:8000
+PUSHAN_AUTOMATION_WEBHOOK_URL=
 ```
 
 `.env` is ignored by Git. Never commit or paste real keys into source, tests, logs, screenshots, issues, or chat. Retrieval and tests work without a key; only live generation needs one. Pushan uses Gemini 3.1 Flash-Lite for high-volume, cost-efficient generation while keeping embeddings local so indexing and retrieval consume no Gemini quota. Google's free-tier terms currently state that submitted content may be used to improve its products; do not submit sensitive farm or personal data without reviewing the applicable terms.
@@ -131,7 +151,7 @@ python -m uvicorn app.main_api:app --reload
 python -m streamlit run frontend/streamlit_app.py
 ```
 
-Open `http://localhost:8501`. API health is at `http://127.0.0.1:8000/health`, Swagger at `/docs`, the knowledge route is `POST /knowledge/ask`, and agent orchestration is `POST /agent/run`.
+Open `http://localhost:8501`. API health is at `http://127.0.0.1:8000/health` and Swagger is at `/docs`. V0.9 adds `GET /approvals`, approval/rejection endpoints, `GET /workflows/{workflow_id}`, `GET /incidents`, and `GET /audit` alongside the knowledge and agent routes.
 
 ## Project structure
 
@@ -145,6 +165,9 @@ Project_Pushan/
 │   └── rag/
 │       ├── loader.py  chunking.py  embeddings.py
 │       └── vector_store.py  retriever.py  qa_service.py
+│   └── workflows/
+│       ├── guardrails.py  workflow_engine.py  approval_service.py
+│       └── incident_service.py  notification_service.py  repository.py
 ├── knowledge/
 │   ├── irrigation_basics.md  tomato_irrigation.md
 │   ├── rice_irrigation.md  cotton_irrigation.md
@@ -162,8 +185,8 @@ Every knowledge document is labeled as a prototype and ends with authoritative s
 python -m unittest discover -s tests
 ```
 
-The suite uses local embeddings and mocked provider calls, so it makes no live paid model call. It verifies loading, retrieval, graph routes, node updates, finite retries, degraded operation, safety constraints, API/UI integration, and V0.1–V0.7 behaviour.
+The suite uses local embeddings and mocked provider calls, so it makes no live paid model call. It verifies loading, retrieval, graph routes, finite retries, degraded operation, guardrails, durable approval and rejection, restart persistence, idempotency, notifications, incidents, auditing, API/UI integration, and earlier-version behaviour.
 
-## V0.8 boundary
+## V0.9 boundary
 
-V0.8 remains local and prototype-grade. It introduces one controlled state graph, not a multi-agent system. It has no Power Automate, UiPath, approval interrupts, Docker, cloud deployment, authentication, MQTT, or real IoT control. Its explicit state and tool boundaries prepare Pushan for later automation integration without implementing V0.9.
+V0.9 remains local and prototype-grade. Execution, notifications, incidents, and approvals are simulations persisted in SQLite. The optional webhook is an integration seam for tools such as Power Automate, not a deployed automation. Pushan has no authentication, role-based access control, Docker, cloud deployment, MQTT, or real pump control. Production use would require identity, authorization, concurrency controls, calibrated agronomy, equipment interlocks, monitoring, and security review. This release does not begin V1.0.

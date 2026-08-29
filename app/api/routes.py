@@ -4,6 +4,12 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from app.agents.agent_service import run_pushan_agent
+from app.workflows.approval_service import (
+    approve_request, get_approval, get_pending_approvals, reject_request,
+)
+from app.workflows.incident_service import get_incidents
+from app.workflows.repository import list_records
+from app.workflows.workflow_engine import get_workflow, resume_approval_workflow
 
 from app.database.repository import (
     get_action_history,
@@ -19,6 +25,7 @@ from app.services.sensor_service import FIELD_CONFIGURATIONS, get_latest_reading
 from .schemas import (
     AgentRunRequest,
     AgentRunResponse,
+    ApprovalDecisionRequest,
     ComparisonResponse,
     DirectPredictionRequest,
     FarmRecommendationRequest,
@@ -45,8 +52,64 @@ def run_agent(payload: AgentRunRequest, request: Request) -> AgentRunResponse:
         payload.field_id,
         model_path=request.app.state.model_path,
         vector_store_path=request.app.state.vector_store_path,
+        database_path=request.app.state.database_path,
     )
     return AgentRunResponse(**result.__dict__)
+
+
+@router.get("/approvals", tags=["Workflows"])
+def pending_approvals(request: Request) -> list[dict[str, Any]]:
+    return get_pending_approvals(request.app.state.database_path)
+
+
+@router.get("/approvals/{request_id}", tags=["Workflows"])
+def approval_detail(request_id: str, request: Request) -> dict[str, Any]:
+    result = get_approval(request_id, request.app.state.database_path)
+    if not result:
+        raise HTTPException(404, f"Unknown approval request: {request_id}")
+    return result
+
+
+@router.post("/approvals/{request_id}/approve", tags=["Workflows"])
+def approve(request_id: str, payload: ApprovalDecisionRequest, request: Request) -> dict[str, Any]:
+    if not payload.approved_by:
+        raise HTTPException(422, "approved_by is required")
+    try:
+        approval = approve_request(request_id, payload.approved_by, payload.note, request.app.state.database_path)
+        workflow = resume_approval_workflow(request_id, request.app.state.database_path)
+        return {"approval": approval, "workflow": workflow}
+    except ValueError as error:
+        raise HTTPException(404, str(error)) from error
+
+
+@router.post("/approvals/{request_id}/reject", tags=["Workflows"])
+def reject(request_id: str, payload: ApprovalDecisionRequest, request: Request) -> dict[str, Any]:
+    if not payload.rejected_by:
+        raise HTTPException(422, "rejected_by is required")
+    try:
+        approval = reject_request(request_id, payload.rejected_by, payload.note, request.app.state.database_path)
+        workflow = resume_approval_workflow(request_id, request.app.state.database_path)
+        return {"approval": approval, "workflow": workflow}
+    except ValueError as error:
+        raise HTTPException(404, str(error)) from error
+
+
+@router.get("/workflows/{workflow_id}", tags=["Workflows"])
+def workflow_detail(workflow_id: str, request: Request) -> dict[str, Any]:
+    result = get_workflow(workflow_id, request.app.state.database_path)
+    if not result:
+        raise HTTPException(404, f"Unknown workflow: {workflow_id}")
+    return result
+
+
+@router.get("/incidents", tags=["Workflows"])
+def incidents(request: Request, field_id: str | None = None) -> list[dict]:
+    return get_incidents(request.app.state.database_path, field_id)
+
+
+@router.get("/audit", tags=["Workflows"])
+def audit_trail(request: Request) -> list[dict]:
+    return list_records("audit_log", request.app.state.database_path)
 
 
 @router.post(
@@ -72,7 +135,7 @@ def ask_knowledge(
 @router.get("/health", response_model=HealthResponse, tags=["Service"])
 def health() -> HealthResponse:
     """Report service availability without touching ML or SQLite."""
-    return HealthResponse(status="ok", service="Pushan", version="0.8")
+    return HealthResponse(status="ok", service="Pushan", version="0.9")
 
 
 @router.get("/fields", response_model=list[FieldResponse], tags=["Fields"])

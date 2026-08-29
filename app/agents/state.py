@@ -24,3 +24,7 @@ class PushanAgentState(TypedDict, total=False):
     final_answer: str
     model_path: str
     vector_store_path: str
+    guardrail_result: dict[str, Any]
+    approval_request_id: str | None
+    workflow_id: str
+    workflow_status: str

@@ -60,7 +60,7 @@ class ApiTests(unittest.TestCase):
 
     def test_health_returns_current_version(self) -> None:
         response = self.client.get("/health").json()
-        self.assertEqual(response["version"], "0.8")
+        self.assertEqual(response["version"], "0.9")
 
     def test_fields_returns_known_fields(self) -> None:
         response = self.client.get("/fields")
@@ -151,7 +151,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.client.get("/docs").status_code, 200)
         openapi_response = self.client.get("/openapi.json")
         self.assertEqual(openapi_response.status_code, 200)
-        self.assertEqual(openapi_response.json()["info"]["version"], "0.8")
+        self.assertEqual(openapi_response.json()["info"]["version"], "0.9")
 
 
 if __name__ == "__main__":

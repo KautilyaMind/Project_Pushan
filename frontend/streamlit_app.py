@@ -1,4 +1,4 @@
-"""API-driven operations and knowledge dashboard for Pushan V0.7."""
+"""API-driven operations, approvals, and knowledge dashboard for Pushan V0.9."""
 
 from typing import Any
 
@@ -7,15 +7,20 @@ import streamlit as st
 
 from frontend.api_client import (
     PushanAPIError,
+    approve_request,
     ask_knowledge,
     run_agent,
     check_health,
     get_action_history,
     get_decision_history,
     get_fields,
+    get_audit_trail,
+    get_incidents,
+    get_pending_approvals,
     get_irrigation_recommendation,
     get_sensor_history,
     get_sensor_reading,
+    reject_request,
 )
 
 
@@ -205,6 +210,16 @@ def render_pushan_agent() -> None:
             st.subheader("Final Answer")
             st.write(response["answer"])
             st.caption(f"Intent: {response['intent']}")
+            if response.get("workflow_status"):
+                st.info(
+                    f"Workflow `{response['workflow_id']}`: "
+                    f"**{response['workflow_status']}**"
+                )
+            if response.get("approval_request_id"):
+                st.warning(
+                    "Human authorization is required. Approval request: "
+                    f"`{response['approval_request_id']}`"
+                )
             with st.expander("Execution Trace"):
                 for index, step in enumerate(response.get("execution_trace", []), 1):
                     st.write(f"{index}. {step}")
@@ -216,6 +231,59 @@ def render_pushan_agent() -> None:
                 st.warning("\n".join(response["errors"]))
         except (PushanAPIError, KeyError, TypeError) as error:
             st.error(f"Agent request unavailable: {error}")
+
+
+def render_approval_center() -> None:
+    """Render persistent operator decisions without bypassing the API."""
+    st.divider()
+    st.header("Approval Center")
+    if st.session_state.pop("approval_decision_message", None):
+        st.success("The approval decision was saved and the workflow status refreshed.")
+    approvals = get_pending_approvals()
+    if not approvals:
+        st.success("No workflows are waiting for human approval.")
+        return
+    st.warning(f"{len(approvals)} workflow(s) require an operator decision.")
+    operator = st.text_input("Operator name", value="farm_operator")
+    for approval in approvals:
+        request_id = approval["request_id"]
+        with st.container(border=True):
+            st.subheader(f"{approval['field_id']} — {approval['action_type']}")
+            st.write(approval["reason"])
+            st.caption(
+                f"Risk: {approval['risk_level']} · Water: "
+                f"{approval['recommended_water_litres']:g} L · Request: {request_id}"
+            )
+            note = st.text_input("Decision note", key=f"note_{request_id}")
+            approve_column, reject_column = st.columns(2)
+            if approve_column.button("Approve and execute", key=f"approve_{request_id}"):
+                approve_request(request_id, operator.strip() or "farm_operator", note)
+                st.session_state["approval_decision_message"] = True
+                st.rerun()
+            if reject_column.button("Reject", key=f"reject_{request_id}"):
+                reject_request(request_id, operator.strip() or "farm_operator", note)
+                st.session_state["approval_decision_message"] = True
+                st.rerun()
+
+
+def render_operations_monitor(field_id: str) -> None:
+    """Show persisted incidents and the append-only automation audit trail."""
+    st.divider()
+    st.header("Workflow Operations")
+    incident_tab, audit_tab = st.tabs(["Incidents", "Audit Trail"])
+    with incident_tab:
+        incidents = get_incidents(field_id)
+        if incidents:
+            st.dataframe(pd.DataFrame(incidents), width="stretch")
+        else:
+            st.info("No incidents are recorded for this field.")
+    with audit_tab:
+        events = get_audit_trail()
+        if events:
+            with st.expander("Audit Trail", expanded=True):
+                st.dataframe(pd.DataFrame(events), width="stretch")
+        else:
+            st.info("No workflow audit events have been recorded yet.")
 
 
 def run_dashboard() -> None:
@@ -288,6 +356,8 @@ def run_dashboard() -> None:
         render_history(sensor_records, decision_records, action_records)
         render_knowledge_assistant()
         render_pushan_agent()
+        render_approval_center()
+        render_operations_monitor(selected_field_id)
     except (PushanAPIError, KeyError, TypeError, ValueError) as error:
         st.error(f"The dashboard could not load field data: {error}")
         st.info("Check the backend status and use Refresh Data to try again.")

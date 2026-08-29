@@ -1,4 +1,4 @@
-"""API-driven operations, approvals, and knowledge dashboard for Pushan V0.9."""
+"""API-driven operations, approvals, knowledge, and readiness for Pushan V1.0."""
 
 from typing import Any
 
@@ -11,6 +11,7 @@ from frontend.api_client import (
     ask_knowledge,
     run_agent,
     check_health,
+    check_readiness,
     get_action_history,
     get_decision_history,
     get_fields,
@@ -286,6 +287,29 @@ def render_operations_monitor(field_id: str) -> None:
             st.info("No workflow audit events have been recorded yet.")
 
 
+def render_system_status() -> None:
+    """Render health separately from dependency readiness."""
+    st.divider()
+    st.header("System Status")
+    readiness = check_readiness()
+    checks = readiness["checks"]
+    labels = {
+        "database": "Database",
+        "ml_model": "ML Model",
+        "knowledge_base": "Knowledge Base",
+        "automation_webhook": "Automation Webhook",
+    }
+    columns = st.columns(len(labels))
+    for column, (key, label) in zip(columns, labels.items()):
+        column.metric(label, str(checks.get(key, "unknown")).upper())
+    if readiness["status"] == "ready":
+        st.success("All core and optional local dependencies are ready.")
+    elif readiness["status"] == "degraded":
+        st.warning("The API is online, but one or more optional capabilities are unavailable.")
+    else:
+        st.error("A critical dependency is unavailable.")
+
+
 def run_dashboard() -> None:
     """Load backend data and render the complete dashboard."""
     st.title("Pushan — The Next-Gen AI Agriculture Engine")
@@ -353,11 +377,12 @@ def run_dashboard() -> None:
             sensor_records = get_sensor_history(selected_field_id, history_limit)
             decision_records = get_decision_history(selected_field_id, history_limit)
             action_records = get_action_history(selected_field_id, history_limit)
-        render_history(sensor_records, decision_records, action_records)
         render_knowledge_assistant()
         render_pushan_agent()
         render_approval_center()
         render_operations_monitor(selected_field_id)
+        render_history(sensor_records, decision_records, action_records)
+        render_system_status()
     except (PushanAPIError, KeyError, TypeError, ValueError) as error:
         st.error(f"The dashboard could not load field data: {error}")
         st.info("Check the backend status and use Refresh Data to try again.")

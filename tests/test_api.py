@@ -60,7 +60,7 @@ class ApiTests(unittest.TestCase):
 
     def test_health_returns_current_version(self) -> None:
         response = self.client.get("/health").json()
-        self.assertEqual(response["version"], "0.9")
+        self.assertEqual(response["version"], "1.0.0")
 
     def test_fields_returns_known_fields(self) -> None:
         response = self.client.get("/fields")
@@ -151,7 +151,18 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.client.get("/docs").status_code, 200)
         openapi_response = self.client.get("/openapi.json")
         self.assertEqual(openapi_response.status_code, 200)
-        self.assertEqual(openapi_response.json()["info"]["version"], "0.9")
+        self.assertEqual(openapi_response.json()["info"]["version"], "1.0.0")
+
+    def test_readiness_reports_dependency_checks(self) -> None:
+        response = self.client.get("/ready")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(response.json()["status"], {"ready", "degraded"})
+        self.assertEqual(response.json()["checks"]["database"], "ok")
+
+    def test_request_id_is_accepted_and_returned(self) -> None:
+        response = self.client.get("/health", headers={"X-Request-ID": "REQ-TEST"})
+        self.assertEqual(response.headers["X-Request-ID"], "REQ-TEST")
+        self.assertIn("X-Process-Time-Ms", response.headers)
 
 
 if __name__ == "__main__":

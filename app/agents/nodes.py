@@ -2,6 +2,7 @@
 
 import logging
 import re
+from time import perf_counter
 
 from app.ml.train import DEFAULT_MODEL_PATH
 from app.rag.vector_store import DEFAULT_VECTOR_STORE_PATH
@@ -90,8 +91,11 @@ def fetch_sensor_node(state: PushanAgentState) -> dict:
             "execution_trace": _append(state, "sensor data skipped: field ID missing"),
         }
     try:
+        started = perf_counter()
         sensor = tools.get_field_sensor_data(field_id)
         farm_input = tools.build_field_input(field_id, sensor)
+        logger.info("sensor data retrieved in %.1f ms", (perf_counter() - started) * 1000,
+                    extra={"field_id": field_id})
         return {"sensor_reading": sensor, "farm_input": farm_input,
                 "execution_trace": _append(state, "sensor data retrieved")}
     except (ValueError, KeyError) as error:
@@ -102,9 +106,11 @@ def fetch_sensor_node(state: PushanAgentState) -> dict:
 def retrieve_knowledge_node(state: PushanAgentState) -> dict:
     attempts = state.get("rag_attempts", 0) + 1
     try:
+        started = perf_counter()
         answer, sources = tools.search_agriculture_knowledge(
             state["user_request"], state.get("vector_store_path", str(DEFAULT_VECTOR_STORE_PATH))
         )
+        logger.info("RAG retrieval completed in %.1f ms", (perf_counter() - started) * 1000)
         return {"rag_answer": answer, "rag_sources": sources, "rag_attempts": attempts,
                 "rag_retry_needed": False,
                 "execution_trace": _append(state, "RAG knowledge retrieved")}
@@ -134,9 +140,12 @@ def ml_prediction_node(state: PushanAgentState) -> dict:
     if "farm_input" not in state:
         return {"execution_trace": _append(state, "ML prediction skipped")}
     try:
+        started = perf_counter()
         prediction = tools.get_ml_prediction(
             state["farm_input"], state.get("model_path", str(DEFAULT_MODEL_PATH))
         )
+        logger.info("ML prediction completed in %.1f ms", (perf_counter() - started) * 1000,
+                    extra={"field_id": state.get("field_id")})
         return {"ml_prediction": prediction,
                 "execution_trace": _append(state, "ML prediction completed")}
     except (FileNotFoundError, ValueError) as error:

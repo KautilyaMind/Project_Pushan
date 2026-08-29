@@ -30,6 +30,11 @@ class HealthResponse(BaseModel):
     version: str
 
 
+class ReadinessResponse(BaseModel):
+    status: str
+    checks: dict[str, str]
+
+
 class FieldResponse(BaseModel):
     field_id: str
     crop: str

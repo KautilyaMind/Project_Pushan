@@ -1,9 +1,14 @@
 """Thin FastAPI routes exposing reusable Pushan capabilities."""
 
 from typing import Any
+import logging
+from time import perf_counter
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from app.agents.agent_service import run_pushan_agent
+from app import __version__
+from app.config import settings
+from app.health import readiness_report
 from app.workflows.approval_service import (
     approve_request, get_approval, get_pending_approvals, reject_request,
 )
@@ -31,6 +36,7 @@ from .schemas import (
     FarmRecommendationRequest,
     FieldResponse,
     HealthResponse,
+    ReadinessResponse,
     IrrigationAssessmentResponse,
     KnowledgeAnswerResponse,
     KnowledgeQuestionRequest,
@@ -42,11 +48,13 @@ from .schemas import (
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/agent/run", response_model=AgentRunResponse, tags=["Agent"])
 def run_agent(payload: AgentRunRequest, request: Request) -> AgentRunResponse:
     """Run the controlled LangGraph workflow through its service boundary."""
+    started = perf_counter()
     result = run_pushan_agent(
         payload.message,
         payload.field_id,
@@ -54,6 +62,7 @@ def run_agent(payload: AgentRunRequest, request: Request) -> AgentRunResponse:
         vector_store_path=request.app.state.vector_store_path,
         database_path=request.app.state.database_path,
     )
+    logger.info("agent workflow completed in %.1f ms", (perf_counter() - started) * 1000)
     return AgentRunResponse(**result.__dict__)
 
 
@@ -135,7 +144,18 @@ def ask_knowledge(
 @router.get("/health", response_model=HealthResponse, tags=["Service"])
 def health() -> HealthResponse:
     """Report service availability without touching ML or SQLite."""
-    return HealthResponse(status="ok", service="Pushan", version="0.9")
+    return HealthResponse(status="ok", service="Pushan", version=__version__)
+
+
+@router.get("/ready", response_model=ReadinessResponse, tags=["Service"])
+def readiness(request: Request) -> ReadinessResponse:
+    """Report whether local dependencies can serve full Pushan features."""
+    return ReadinessResponse(**readiness_report(
+        request.app.state.database_path,
+        request.app.state.model_path,
+        request.app.state.vector_store_path,
+        settings.automation_webhook_url,
+    ))
 
 
 @router.get("/fields", response_model=list[FieldResponse], tags=["Fields"])

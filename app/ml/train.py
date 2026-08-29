@@ -3,6 +3,8 @@
 from math import sqrt
 from pathlib import Path
 from typing import Any
+from datetime import datetime, timezone
+import json
 
 import joblib
 import pandas as pd
@@ -96,10 +98,21 @@ def train_and_evaluate_models(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(candidates[selected_model_name], output_path)
 
+    metadata = {
+        "model_type": selected_model_name,
+        "model_version": "1.0.0",
+        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "training_data": "synthetic domain-generated development data",
+        "metrics": metrics[selected_model_name],
+    }
+    metadata_path = output_path.with_suffix(".metadata.json")
+    metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+
     return {
         "metrics": metrics,
         "selected_model": selected_model_name,
         "model_path": output_path,
+        "metadata_path": metadata_path,
     }
 
 

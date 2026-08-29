@@ -6,6 +6,7 @@ import sqlite3
 
 DEFAULT_DATABASE_PATH = Path("data") / "pushan.db"
 DatabasePath = str | Path
+CURRENT_SCHEMA_VERSION = 1
 
 
 def get_connection(database_path: DatabasePath = DEFAULT_DATABASE_PATH) -> sqlite3.Connection:
@@ -135,7 +136,24 @@ def initialize_database(database_path: DatabasePath = DEFAULT_DATABASE_PATH) -> 
                     actor TEXT NOT NULL,
                     details TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version INTEGER PRIMARY KEY,
+                    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
                 """
+            )
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
+                (CURRENT_SCHEMA_VERSION,),
             )
     finally:
         connection.close()
+
+
+def get_schema_version(database_path: DatabasePath = DEFAULT_DATABASE_PATH) -> int:
+    """Return the latest safely applied schema version."""
+    initialize_database(database_path)
+    with get_connection(database_path) as connection:
+        row = connection.execute("SELECT MAX(version) AS version FROM schema_version").fetchone()
+    return int(row["version"])

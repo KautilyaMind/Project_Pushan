@@ -1,1 +1,1 @@
-"""Persistent safety and workflow automation for Pushan V0.9."""
+"""Persistent safety and workflow automation for Pushan V1.0."""

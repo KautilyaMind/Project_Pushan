@@ -1,0 +1,39 @@
+services:
+  pushan-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PUSHAN_ENV: container
+      PUSHAN_API_HOST: 0.0.0.0
+      PUSHAN_DATABASE_PATH: /app/data/pushan.db
+      PUSHAN_MODEL_PATH: /app/artifacts/irrigation_model.joblib
+      PUSHAN_VECTOR_STORE_PATH: /app/artifacts/vector_store
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./artifacts:/app/artifacts
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  pushan-ui:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      PUSHAN_API_URL: http://pushan-api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      pushan-api:
+        condition: service_healthy
+    restart: unless-stopped

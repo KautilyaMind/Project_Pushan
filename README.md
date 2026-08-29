@@ -1,192 +1,215 @@
-# Pushan — The Next-Gen AI Agriculture Engine (V0.9)
+# Pushan — The Next-Gen AI Agriculture Engine
 
-Pushan is a prototype smart-irrigation process-intelligence platform. V0.9 adds persistent human approval, deterministic guardrails, idempotent workflow automation, incident creation, notifications, and an auditable operator interface. It preserves the V0.1–V0.8 sensor, rule, ML, operational, SQLite, API, dashboard, RAG, and LangGraph layers.
+Pushan is a portfolio-grade AI process-intelligence platform for simulated irrigation operations. It combines deterministic rules, an advisory ML model, grounded RAG knowledge, controlled LangGraph orchestration, operational guardrails, persistent human approval, and auditable workflow automation. V1.0 packages the system as configurable FastAPI and Streamlit services with Docker, readiness checks, structured logs, integration tests, and CI. It is an engineering prototype—not production-certified agronomic or industrial control software.
 
-## Project evolution
+## Problem
 
-```text
-V0.1  Rule-Based Irrigation Engine
-V0.2  Sensor Simulation + Operational Feasibility
-V0.3  SQLite Persistence + Historical Records
-V0.4  Machine-Learning Irrigation Prediction
-V0.5  FastAPI Backend
-V0.6  Streamlit Dashboard
-V0.7  RAG Agriculture Knowledge System
-V0.8  LangGraph Agentic Orchestration
-V0.9  Human Approval + Guardrails + Workflow Automation
-```
+Agricultural decisions are often split across sensor readings, local operating knowledge, equipment status, human judgment, and disconnected records. A recommendation alone is insufficient: an operational system must explain the decision, check feasibility, enforce policy, obtain authorization when risk is high, avoid duplicate actions, and preserve an audit trail.
 
-V0.9 turns recommendations into controlled operational workflows. A technically feasible irrigation recommendation is not automatically authorized: guardrails can require a durable human decision, and a rejected workflow never starts.
+## Solution
 
-## V0.9 safety and automation architecture
+Pushan connects simulated sensors to rule-based irrigation decisions and an advisory scikit-learn prediction. RAG retrieves relevant procedures from a local Chroma index, while LangGraph coordinates capabilities without allowing an LLM to override deterministic safety controls. Guardrails separate recommendation from execution; high-risk actions pause for human approval, while maintenance conditions create incidents and simulated notifications. SQLite preserves assessments, approvals, workflows, incidents, notifications, and audit history across restarts.
+
+## Architecture
 
 ```text
-Agent assessment → deterministic guardrails → workflow proposal
-                                              ├─ safe → simulated execution
-                                              ├─ risky → WAITING_FOR_APPROVAL
-                                              │           ├─ approve → execute
-                                              │           └─ reject  → BLOCKED
-                                              └─ fault → incident + notification
-Every transition → SQLite audit log
+Human Operator → Streamlit → FastAPI → LangGraph Agent
+                                      ├─ Sensors
+                                      ├─ Rules + ML advisory
+                                      └─ RAG knowledge
+                                             ↓
+                                   Operational Engine
+                                             ↓
+                                        Guardrails
+                                             ↓
+                                  Approval required?
+                                   ├─ No  → Workflow
+                                   └─ Yes → Human Review
+                                                ├─ Approve → Workflow
+                                                └─ Reject  → Stop
+                                             ↓
+                              Incidents + Notifications + Audit
+                                             ↓
+                                           SQLite
+
+Supporting layers: configuration · structured logging · request IDs
+                   readiness · tests · Docker · GitHub Actions
 ```
 
-The approval pause is explicit persisted state rather than an in-memory prompt. `approval_requests` and `workflow_executions` survive API restarts, so an operator can decide later from the Approval Center. This prototype uses no unrestricted autonomous action and never controls physical equipment.
+See [docs/architecture.md](docs/architecture.md) for component and data-flow details.
 
-Guardrails are deterministic and run after the operational engine. Faulty sensors, an offline pump, insufficient water, operational blocks, high-risk recommendations, and irrigation volumes above 5,000 litres are handled before authorization. The API response distinguishes `technically_executable` from `authorized_to_execute`.
+## Version evolution
 
-Workflow proposals carry an idempotency key. Repeating the same proposal reuses its existing record, and repeating a completed execution does not create another incident or notification. Simulated local notification delivery works with no external service. Setting `PUSHAN_AUTOMATION_WEBHOOK_URL` enables a bounded optional JSON webhook; failures are recorded rather than crashing the workflow.
+| Version | Capability |
+|---|---|
+| V0.1 | Rule-based irrigation engine |
+| V0.2 | Sensor simulation and operational feasibility |
+| V0.3 | SQLite persistence and history |
+| V0.4 | Machine-learning advisory prediction |
+| V0.5 | FastAPI backend |
+| V0.6 | Streamlit dashboard |
+| V0.7 | RAG agriculture knowledge system |
+| V0.8 | LangGraph controlled orchestration |
+| V0.9 | Human approval, guardrails, and workflow automation |
+| V1.0 | Deployable, configurable, observable portfolio release |
 
-## V0.8 controlled agent architecture
+## Technology stack
 
-```text
-User → Pushan Agent → LangGraph State → Intent Classification
-                              ↓ conditional routing
-                Sensor Tool | RAG Tool | ML Tool
-                              ↓
-                Rule Engine → Operational Engine
-                              ↓
-                   Final Response + Trace
-```
+- Python 3.12, FastAPI, Uvicorn, Pydantic
+- Streamlit and HTTPX
+- SQLite
+- pandas, scikit-learn, and joblib
+- LangChain, LangGraph, Chroma
+- deterministic local hash embeddings (`local-hash-v1`)
+- Google Gemini (`gemini-3.1-flash-lite` by default) for grounded generation
+- Docker Compose and GitHub Actions
 
-The graph supports `FIELD_ASSESSMENT`, `KNOWLEDGE_QUERY`, and `FULL_ANALYSIS`. It extracts simple IDs such as `FIELD_001`, routes with real LangGraph conditional edges, retries failed RAG work at most twice, and continues in a reported degraded mode when optional ML or knowledge services are unavailable.
-
-### LangGraph concepts
-
-- **State:** shared data carrying the request, intent, field data, results, errors, retry count, trace, and final response.
-- **Node:** one focused function such as classification, sensor retrieval, rules, ML, RAG, operational evaluation, or final formatting.
-- **Edge:** a connection specifying the next node.
-- **Conditional edge:** a branch selected from state; Pushan uses these for intent routing, missing fields, full analysis, and finite retries.
-- **Tool:** a thin wrapper around an existing Pushan capability, with no duplicated business logic.
-- **Orchestration:** coordinating tools and steps in the correct order.
-- **Retry:** repeating failed RAG retrieval within an explicit two-attempt maximum.
-
-A normal workflow has a mostly predetermined sequence. An agentic workflow inspects state and selects routes based on the task and current results. Pushan remains controlled agentic orchestration, not unrestricted autonomy. Its trace exposes only node/tool status—not private chain-of-thought.
-
-```text
-LLM / Agent → orchestrates and explains
-ML          → predicts
-Rules       → constrain
-Operational Engine → decides feasibility
-```
-
-Final responses are assembled from structured state. If the operational engine blocks execution, neither RAG guidance nor an LLM can change it to “proceed.”
-
-RAG allows Pushan to search its own agriculture documents before asking an LLM to generate an answer. This reduces reliance on model memory and makes answers traceable to the project's knowledge base.
-
-## Architecture and responsibilities
-
-```text
-User Question → Streamlit → FastAPI → RAG Service → Retriever
-     → Chroma Vector Store → Relevant Chunks → LLM
-     → Grounded Answer + Source Filenames
-```
-
-The RAG path complements—never replaces—the operational path:
-
-- **RAG:** knowledge and explanation only.
-- **ML:** predictive advisory only.
-- **Rule engine:** deterministic irrigation recommendation.
-- **Operational engine:** execution feasibility and safety state.
-
-The knowledge assistant cannot switch a pump or override operational rules. Streamlit calls FastAPI; it never imports backend RAG or irrigation logic directly.
-
-## RAG concepts in plain English
-
-- **Chunking:** breaking documents into small overlapping passages. V0.7 uses 800 characters with 100 overlap and preserves source metadata.
-- **Embeddings:** numerical text representations used to find related wording. V0.7 uses deterministic local hash embeddings, so retrieval needs no paid API.
-- **Vector database:** Chroma stores chunk vectors and metadata for similarity search.
-- **Retrieval:** selecting the chunks most relevant to the question before generation.
-- **Generation:** a Google Gemini model turns only the retrieved passages into a readable answer.
-- **Grounding:** requiring the model to use supplied context, admit insufficient information, and return source filenames.
-
-The local embedding is lightweight and test-friendly. A production semantic embedding provider can later replace only `app/rag/embeddings.py`.
-
-## Install and configure
-
-Python 3.11 or newer is required.
+## Local installation
 
 ```powershell
+cd "C:\Users\sriad\OneDrive\Documents\ChatGPT\pushan\code\pushan v0.1"
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Edit `.env` locally:
+`.env` is local and ignored by Git. Add `GOOGLE_API_KEY` only if live Gemini generation is required. Never commit keys, webhook URLs containing credentials, passwords, or tokens.
 
-```text
-GOOGLE_API_KEY=your_key_here
-PUSHAN_LLM_MODEL=gemini-3.1-flash-lite
-PUSHAN_API_URL=http://127.0.0.1:8000
-PUSHAN_AUTOMATION_WEBHOOK_URL=
-```
+Configuration is centralized in `app/config.py`. It covers environment, API, database/model/vector paths, Gemini and embedding models, guardrail threshold, webhook URL/timeout, and log level.
 
-`.env` is ignored by Git. Never commit or paste real keys into source, tests, logs, screenshots, issues, or chat. Retrieval and tests work without a key; only live generation needs one. Pushan uses Gemini 3.1 Flash-Lite for high-volume, cost-efficient generation while keeping embeddings local so indexing and retrieval consume no Gemini quota. Google's free-tier terms currently state that submitted content may be used to improve its products; do not submit sensitive farm or personal data without reviewing the applicable terms.
+## Prepare local artifacts
 
-Ordinary dashboard requests use a five-second timeout. Gemini-backed knowledge and agent requests use a separate 60-second timeout, while provider calls have bounded retries and return a controlled service error when Google is unreachable.
-
-## Build the knowledge index
-
-Run after installation and whenever a knowledge document changes:
+Initialize or upgrade SQLite without deleting existing data:
 
 ```powershell
-python -m app.rag.vector_store
+python -m app.database.init_db
 ```
 
-This loads `knowledge/*.md`, chunks and embeds them locally, and persists Chroma under `artifacts/vector_store/`. Questions never silently rebuild the index.
-
-## Train and run
-
-Train the advisory model once:
+Train the advisory model and write model metadata:
 
 ```powershell
 python -m app.ml.train
 ```
 
-Then use two terminals:
+Index Markdown and PDF knowledge files and write index metadata:
 
 ```powershell
-# Terminal 1
-python -m uvicorn app.main_api:app --reload
-
-# Terminal 2
-python -m streamlit run frontend/streamlit_app.py
+python -m app.rag.index
 ```
 
-Open `http://localhost:8501`. API health is at `http://127.0.0.1:8000/health` and Swagger is at `/docs`. V0.9 adds `GET /approvals`, approval/rejection endpoints, `GET /workflows/{workflow_id}`, `GET /incidents`, and `GET /audit` alongside the knowledge and agent routes.
+The ML training data is synthetic/domain-generated development data. Neither the model nor the prototype thresholds are production validated.
 
-## Project structure
+## Run Pushan
 
-```text
-Project_Pushan/
-├── app/
-│   ├── api/  database/  ml/  services/
-│   ├── agents/
-│   │   ├── state.py  tools.py  nodes.py
-│   │   └── graph.py  agent_service.py
-│   └── rag/
-│       ├── loader.py  chunking.py  embeddings.py
-│       └── vector_store.py  retriever.py  qa_service.py
-│   └── workflows/
-│       ├── guardrails.py  workflow_engine.py  approval_service.py
-│       └── incident_service.py  notification_service.py  repository.py
-├── knowledge/
-│   ├── irrigation_basics.md  tomato_irrigation.md
-│   ├── rice_irrigation.md  cotton_irrigation.md
-│   └── drip_irrigation_sop.md
-├── artifacts/vector_store/       # generated, ignored
-├── frontend/  tests/
-├── .env.example  README.md  requirements.txt
+Backend only:
+
+```powershell
+python -m uvicorn app.main_api:app --host 127.0.0.1 --port 8000
 ```
 
-Every knowledge document is labeled as a prototype and ends with authoritative sources. It is educational and requires local agronomic validation.
+Backend and frontend locally: keep the backend command running, then use a second activated terminal:
 
-## Tests
+```powershell
+$env:PUSHAN_API_URL = "http://127.0.0.1:8000"
+python -m streamlit run frontend/streamlit_app.py --server.port 8501
+```
+
+Open `http://127.0.0.1:8501`. API documentation is at `http://127.0.0.1:8000/docs`.
+
+Docker startup:
+
+```powershell
+docker compose up --build
+```
+
+Compose exposes API port 8000 and UI port 8501. Bind mounts preserve `data/` and `artifacts/` across container replacement. Docker must be installed separately.
+
+## Health, readiness, and observability
+
+`GET /health` answers only “is the API process alive?”
+
+```json
+{"status":"ok","service":"Pushan","version":"1.0.0"}
+```
+
+`GET /ready` checks SQLite, model compatibility, knowledge-index availability, and webhook configuration:
+
+```json
+{
+  "status": "ready",
+  "checks": {
+    "database": "ok",
+    "ml_model": "ok",
+    "knowledge_base": "ok",
+    "automation_webhook": "not_configured"
+  }
+}
+```
+
+A missing optional model or index produces `degraded`; an unconfigured webhook is informational. Requests accept or generate `X-Request-ID`, return it with `X-Process-Time-Ms`, and write JSON logs. Unexpected failures return a safe error envelope without stack traces, paths, or secrets.
+
+## Testing
 
 ```powershell
 python -m unittest discover -s tests
+python -m unittest discover -s tests/integration
 ```
 
-The suite uses local embeddings and mocked provider calls, so it makes no live paid model call. It verifies loading, retrieval, graph routes, finite retries, degraded operation, guardrails, durable approval and rejection, restart persistence, idempotency, notifications, incidents, auditing, API/UI integration, and earlier-version behaviour.
+With the API running:
 
-## V0.9 boundary
+```powershell
+python scripts/smoke_test.py --base-url http://127.0.0.1:8000
+```
 
-V0.9 remains local and prototype-grade. Execution, notifications, incidents, and approvals are simulations persisted in SQLite. The optional webhook is an integration seam for tools such as Power Automate, not a deployed automation. Pushan has no authentication, role-based access control, Docker, cloud deployment, MQTT, or real pump control. Production use would require identity, authorization, concurrency controls, calibrated agronomy, equipment interlocks, monitoring, and security review. This release does not begin V1.0.
+Tests mock external providers and require no paid calls. GitHub Actions runs the complete suite on pushes and pull requests.
+
+## Key API endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Liveness |
+| `GET /ready` | Dependency readiness |
+| `GET /fields` | Configured fields |
+| `GET /fields/{id}/sensor` | Current simulated reading |
+| `POST /irrigation/recommend` | Rules, ML, operations, persistence |
+| `POST /knowledge/ask` | Grounded RAG answer |
+| `POST /agent/run` | Controlled LangGraph workflow |
+| `GET /approvals` | Pending approvals |
+| `POST /approvals/{id}/approve` | Authorize and resume |
+| `POST /approvals/{id}/reject` | Reject and block |
+| `GET /workflows/{id}` | Workflow state |
+| `GET /incidents` | Operational incidents |
+| `GET /audit` | Audit trail |
+
+## Safety and control hierarchy
+
+```text
+LLM / LangGraph → understands, retrieves, routes, and explains
+ML              → predicts advisory demand
+Rules           → make deterministic irrigation decisions
+Operations      → check equipment and resource feasibility
+Guardrails      → enforce deterministic action policy
+Human           → authorizes selected high-risk actions
+Workflow engine → performs idempotent simulated downstream tasks
+```
+
+No higher layer bypasses a lower control. “Technically executable” and “authorized to execute” are separate API concepts. Approval and workflow state are persisted so a restart cannot silently lose a pending decision.
+
+## Limitations
+
+- Simulated sensors and workflow execution; no real pump or industrial hardware
+- Prototype agronomic thresholds requiring local expert validation
+- Synthetic/domain-generated ML development data
+- No production authentication, authorization, or tenancy
+- Local SQLite is not intended for high concurrency
+- RAG quality depends on supplied documents; live generation requires Gemini connectivity
+- Generic webhook seam, not a complete Power Automate deployment
+- No Kubernetes, production monitoring stack, or production certification
+
+Potential V1.x work includes authentication, PostgreSQL, calibrated field trials, background jobs, signed webhooks, richer metrics, and real device adapters—but none is implemented in V1.0.
+
+## Demonstration
+
+Use [docs/demo_guide.md](docs/demo_guide.md) for a deterministic 5–8 minute walkthrough.

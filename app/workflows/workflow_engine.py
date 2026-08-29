@@ -2,6 +2,7 @@
 
 from dataclasses import asdict
 import hashlib
+import logging
 import uuid
 
 from app.database.db import DEFAULT_DATABASE_PATH, DatabasePath, initialize_database
@@ -11,6 +12,8 @@ from .guardrails import GuardrailResult, evaluate_guardrails
 from .incident_service import create_incident
 from .notification_service import send_notification
 from .repository import audit, find_workflow_by_key, get_one, insert_record, update_record
+
+logger = logging.getLogger(__name__)
 
 
 def stable_idempotency_key(field_id: str, action: str, water: float, risk: str) -> str:
@@ -28,6 +31,7 @@ def propose_workflow(field_id: str, sensor: dict, recommendation: dict, operatio
         field_id, action, recommendation["recommended_water_litres"], recommendation["risk_level"])
     existing = find_workflow_by_key(key, database_path)
     if existing:
+        logger.info("duplicate workflow proposal prevented", extra={"workflow_id": existing["workflow_id"], "field_id": field_id})
         existing["guardrail_result"] = asdict(guardrail)
         existing["duplicate_prevented"] = True
         return existing
@@ -38,6 +42,7 @@ def propose_workflow(field_id: str, sensor: dict, recommendation: dict, operatio
             recommendation["recommended_water_litres"], recommendation["risk_level"],
             ", ".join(guardrail.guardrail_flags), database_path)
         status = "WAITING_FOR_APPROVAL"
+        logger.info("human approval requested", extra={"field_id": field_id})
     else:
         status = "PENDING"
     record = {"workflow_id": workflow_id, "field_id": field_id, "created_at": utc_timestamp(),
@@ -49,6 +54,8 @@ def propose_workflow(field_id: str, sensor: dict, recommendation: dict, operatio
     audit("ACTION_PROPOSED", "WORKFLOW", workflow_id, field_id, "AGENT",
           {"action": action, "guardrails": asdict(guardrail)}, database_path)
     if not guardrail.allowed:
+        logger.warning("guardrail blocked irrigation: %s", guardrail.blocked_reason,
+                       extra={"workflow_id": workflow_id, "field_id": field_id})
         audit("GUARDRAIL_BLOCKED", "WORKFLOW", workflow_id, field_id, "SYSTEM",
               {"reason": guardrail.blocked_reason,
                "flags": guardrail.guardrail_flags}, database_path)
@@ -91,6 +98,7 @@ def execute_workflow(workflow_id: str, database_path: DatabasePath = DEFAULT_DAT
     update_record("workflow_executions", "workflow_id", workflow_id,
                   {"status": "COMPLETED", "completed_at": utc_timestamp()}, database_path)
     audit("WORKFLOW_COMPLETED", "WORKFLOW", workflow_id, workflow["field_id"], "SYSTEM", {"action": action}, database_path)
+    logger.info("workflow completed", extra={"workflow_id": workflow_id, "field_id": workflow["field_id"]})
     return get_workflow(workflow_id, database_path)  # type: ignore[return-value]
 
 

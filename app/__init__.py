@@ -1,4 +1,6 @@
-"""Core package for Pushan V0.9."""
+"""Pushan AI process-intelligence platform."""
+
+__version__ = "1.0.0"
 
 from .irrigation_engine import CROP_REQUIREMENTS, calculate_irrigation
 from .models import (

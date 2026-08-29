@@ -1,1 +1,1 @@
-"""HTTP API package for Pushan V0.9."""
+"""HTTP API package for Pushan V1.0."""

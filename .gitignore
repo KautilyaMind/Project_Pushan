@@ -12,4 +12,5 @@ venv/
 data/*.db
 data/training_data.csv
 artifacts/*.joblib
+artifacts/*.json
 artifacts/vector_store/

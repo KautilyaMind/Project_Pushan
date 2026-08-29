@@ -33,6 +33,11 @@ def check_health() -> dict[str, Any]:
     return _expect_dictionary(_request("GET", "/health"))
 
 
+def check_readiness() -> dict[str, Any]:
+    """Return dependency readiness and degraded-feature information."""
+    return _expect_dictionary(_request("GET", "/ready"))
+
+
 def get_fields() -> list[dict[str, Any]]:
     """Return configured field metadata."""
     return _expect_list(_request("GET", "/fields"))

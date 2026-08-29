@@ -10,6 +10,7 @@ from frontend.api_client import (
     MalformedResponseError,
     PushanAPIError,
     check_health,
+    check_readiness,
     approve_request,
     get_audit_trail,
     get_fields,
@@ -23,6 +24,12 @@ from frontend.api_client import (
 
 
 class FrontendApiClientTests(unittest.TestCase):
+    @patch("frontend.api_client.httpx.request")
+    def test_readiness_uses_api(self, mock_request: object) -> None:
+        mock_request.return_value = json_response({"status": "ready", "checks": {}})  # type: ignore[attr-defined]
+        self.assertEqual(check_readiness()["status"], "ready")
+        self.assertTrue(mock_request.call_args.args[1].endswith("/ready"))  # type: ignore[attr-defined]
+
     @patch("frontend.api_client.httpx.request")
     def test_pending_approvals_use_api(self, mock_request: object) -> None:
         mock_request.return_value = json_response([])  # type: ignore[attr-defined]

@@ -1,4 +1,4 @@
-"""Controlled LangGraph orchestration with V0.9 workflow automation."""
+"""Controlled LangGraph orchestration for Pushan V1.0."""
 
 from .agent_service import AgentResponse, run_pushan_agent
 

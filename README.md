@@ -1,5 +1,24 @@
 # Pushan — The Next-Gen AI Agriculture Engine
 
+## Streamlit Community Cloud
+
+The `streamlit-cloud` branch includes a single-process cloud entrypoint at
+`streamlit_app.py`. It starts the FastAPI application on localhost inside the
+Streamlit process and generates the ignored ML and retrieval artifacts in
+temporary storage during first startup.
+
+Deploy this branch from Streamlit Community Cloud with:
+
+- Repository: `KautilyaMind/Project_Pushan`
+- Branch: `streamlit-cloud`
+- Main file path: `streamlit_app.py`
+- Python version: `3.12`
+
+Add `GOOGLE_API_KEY` and, optionally, `PUSHAN_LLM_MODEL` in the Streamlit
+Secrets editor. Do not commit `.env` or `secrets.toml`. Runtime database and
+generated artifacts are ephemeral and are recreated whenever the app instance
+is rebuilt or restarted.
+
 Pushan is a portfolio-grade AI process-intelligence platform for simulated irrigation operations. It combines deterministic rules, an advisory ML model, grounded RAG knowledge, controlled LangGraph orchestration, operational guardrails, persistent human approval, and auditable workflow automation. V1.0 packages the system as configurable FastAPI and Streamlit services with Docker, readiness checks, structured logs, integration tests, and CI. It is an engineering prototype—not production-certified agronomic or industrial control software.
 
 ## Problem

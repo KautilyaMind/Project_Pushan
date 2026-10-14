@@ -3,7 +3,7 @@
 import json
 from typing import Any
 
-from app.database.db import DEFAULT_DATABASE_PATH, DatabasePath, get_connection
+from app.database.db import DEFAULT_DATABASE_PATH, DatabasePath, execute, get_connection
 from app.database.repository import utc_timestamp
 
 
@@ -16,7 +16,7 @@ def insert_record(table: str, values: dict[str, Any], database_path: DatabasePat
     connection = get_connection(database_path)
     try:
         with connection:
-            connection.execute(f"INSERT INTO {table} ({columns}) VALUES ({placeholders})", tuple(values.values()))
+            execute(connection, f"INSERT INTO {table} ({columns}) VALUES ({placeholders})", tuple(values.values()))
     finally:
         connection.close()
 
@@ -27,7 +27,7 @@ def get_one(table: str, key: str, value: str, database_path: DatabasePath = DEFA
         raise ValueError("Unsupported workflow lookup")
     connection = get_connection(database_path)
     try:
-        row = connection.execute(f"SELECT * FROM {table} WHERE {key} = ?", (value,)).fetchone()
+        row = execute(connection, f"SELECT * FROM {table} WHERE {key} = ?", (value,)).fetchone()
         return dict(row) if row else None
     finally:
         connection.close()
@@ -46,7 +46,7 @@ def list_records(table: str, database_path: DatabasePath = DEFAULT_DATABASE_PATH
     order = "timestamp" if table == "audit_log" else "created_at"
     connection = get_connection(database_path)
     try:
-        rows = connection.execute(f"SELECT * FROM {table}{where} ORDER BY {order} DESC, id DESC", parameters).fetchall()
+        rows = execute(connection, f"SELECT * FROM {table}{where} ORDER BY {order} DESC, id DESC", parameters).fetchall()
         return [dict(row) for row in rows]
     finally:
         connection.close()
@@ -60,7 +60,7 @@ def update_record(table: str, key: str, value: str, updates: dict[str, Any], dat
     connection = get_connection(database_path)
     try:
         with connection:
-            connection.execute(f"UPDATE {table} SET {assignments} WHERE {key} = ?", (*updates.values(), value))
+            execute(connection, f"UPDATE {table} SET {assignments} WHERE {key} = ?", (*updates.values(), value))
     finally:
         connection.close()
 
@@ -68,7 +68,7 @@ def update_record(table: str, key: str, value: str, updates: dict[str, Any], dat
 def find_workflow_by_key(idempotency_key: str, database_path: DatabasePath = DEFAULT_DATABASE_PATH) -> dict[str, Any] | None:
     connection = get_connection(database_path)
     try:
-        row = connection.execute("SELECT * FROM workflow_executions WHERE idempotency_key = ?", (idempotency_key,)).fetchone()
+        row = execute(connection, "SELECT * FROM workflow_executions WHERE idempotency_key = ?", (idempotency_key,)).fetchone()
         return dict(row) if row else None
     finally:
         connection.close()

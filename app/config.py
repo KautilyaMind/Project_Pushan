@@ -21,7 +21,9 @@ class Settings:
     api_host: str = os.getenv("PUSHAN_API_HOST", "127.0.0.1")
     api_port: int = int(os.getenv("PUSHAN_API_PORT", "8000"))
     api_url: str = os.getenv("PUSHAN_API_URL", "http://127.0.0.1:8000")
-    database_path: Path = _path("PUSHAN_DATABASE_PATH", PROJECT_ROOT / "data" / "pushan.db")
+    database_path: str | Path = os.getenv("DATABASE_URL") or _path(
+        "PUSHAN_DATABASE_PATH", PROJECT_ROOT / "data" / "pushan.db"
+    )
     model_path: Path = _path("PUSHAN_MODEL_PATH", PROJECT_ROOT / "artifacts" / "irrigation_model.joblib")
     vector_store_path: Path = _path("PUSHAN_VECTOR_STORE_PATH", PROJECT_ROOT / "artifacts" / "vector_store")
     llm_model: str = os.getenv("PUSHAN_LLM_MODEL", "gemini-3.1-flash-lite")

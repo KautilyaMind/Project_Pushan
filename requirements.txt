@@ -13,5 +13,6 @@ langchain-chroma
 chromadb
 langchain-google-genai
 python-dotenv
+psycopg[binary]
 langgraph
 pypdf

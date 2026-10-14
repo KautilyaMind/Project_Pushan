@@ -137,6 +137,23 @@ python -m streamlit run frontend/streamlit_app.py --server.port 8501
 
 Open `http://127.0.0.1:8501`. API documentation is at `http://127.0.0.1:8000/docs`.
 
+### PostgreSQL / Neon
+
+Pushan uses SQLite locally by default. For persistent cloud data, set a PostgreSQL
+connection URL in `DATABASE_URL`; it takes precedence over `PUSHAN_DATABASE_PATH`.
+The tables are created automatically when the API starts.
+
+For Streamlit Community Cloud, open the app's **Settings → Secrets** and paste:
+
+```toml
+DATABASE_URL = "postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require"
+GOOGLE_API_KEY = "your-google-api-key"
+PUSHAN_LLM_MODEL = "gemini-3.1-flash-lite"
+```
+
+Copy the exact pooled connection string from Neon's connection dialog. Do not add
+these values to `.env.example`, commit them, or paste real credentials into GitHub.
+
 Docker startup:
 
 ```powershell

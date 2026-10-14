@@ -1,10 +1,11 @@
 """Lightweight dependency readiness checks."""
 
 from pathlib import Path
-import sqlite3
 from typing import Any
 
 import joblib
+
+from app.database.db import execute, get_connection
 
 
 def readiness_report(database_path: str | Path, model_path: str | Path,
@@ -23,10 +24,13 @@ def readiness_report(database_path: str | Path, model_path: str | Path,
 
 def _database_check(path: str | Path) -> str:
     try:
-        with sqlite3.connect(path) as connection:
-            connection.execute("SELECT 1").fetchone()
+        connection = get_connection(path)
+        try:
+            execute(connection, "SELECT 1").fetchone()
+        finally:
+            connection.close()
         return "ok"
-    except (OSError, sqlite3.Error):
+    except Exception:
         return "unavailable"
 
 

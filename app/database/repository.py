@@ -5,7 +5,7 @@ from typing import Any
 
 from app.models import IrrigationRecommendation, OperationalDecision, SensorReading
 
-from .db import DEFAULT_DATABASE_PATH, DatabasePath, get_connection
+from .db import DEFAULT_DATABASE_PATH, DatabasePath, execute, get_connection, is_postgres
 
 
 HISTORY_QUERIES = {
@@ -46,7 +46,7 @@ def save_field(
     connection = get_connection(database_path)
     try:
         with connection:
-            connection.execute(
+            execute(connection,
                 """
                 INSERT INTO fields (field_id, crop, crop_stage, field_area_m2, created_at)
                 VALUES (?, ?, ?, ?, ?)
@@ -179,7 +179,11 @@ def _insert_and_return_id(
     connection = get_connection(database_path)
     try:
         with connection:
-            cursor = connection.execute(sql, values)
+            if is_postgres(database_path):
+                cursor = execute(connection, f"{sql.rstrip()} RETURNING id", values)
+                row = cursor.fetchone()
+                return int(row["id"])
+            cursor = execute(connection, sql, values)
             if cursor.lastrowid is None:
                 raise RuntimeError("Database insert did not create a record ID")
             return cursor.lastrowid
@@ -202,7 +206,7 @@ def _get_history(
 
     connection = get_connection(database_path)
     try:
-        rows = connection.execute(query, (field_id, limit)).fetchall()
+        rows = execute(connection, query, (field_id, limit)).fetchall()
         return [dict(row) for row in rows]
     finally:
         connection.close()

@@ -1,0 +1,11 @@
+{
+  "model_type": "Random Forest",
+  "model_version": "1.0.0",
+  "trained_at": "2026-08-29T14:08:44.286863+00:00",
+  "training_data": "synthetic domain-generated development data",
+  "metrics": {
+    "mae": 701.6185515000001,
+    "rmse": 1361.2320249249296,
+    "r2": 0.9195145720116382
+  }
+}

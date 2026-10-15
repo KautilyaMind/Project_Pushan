@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shutil
 import tempfile
 from threading import Lock, Thread
 from time import monotonic, sleep
@@ -13,6 +14,7 @@ from urllib.request import urlopen
 
 _START_LOCK = Lock()
 _STARTED = False
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def configure_cloud_environment() -> tuple[Path, int]:
@@ -41,19 +43,34 @@ def configure_cloud_environment() -> tuple[Path, int]:
 
 
 def prepare_runtime_assets() -> None:
-    """Generate ignored model and retrieval assets when a cloud instance starts."""
+    """Copy bundled assets quickly, rebuilding only when they are unavailable."""
     from app.config import settings
-    from app.ml.data_generator import generate_training_data
-    from app.ml.train import train_and_evaluate_models
-    from app.rag.index import index_knowledge
 
     if not settings.model_path.is_file():
-        training_data = generate_training_data(num_samples=1000, random_seed=42)
-        train_and_evaluate_models(training_data, settings.model_path)
+        bundled_model = PROJECT_ROOT / "artifacts" / "irrigation_model.joblib"
+        if bundled_model.is_file():
+            settings.model_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(bundled_model, settings.model_path)
+        else:
+            from app.ml.data_generator import generate_training_data
+            from app.ml.train import train_and_evaluate_models
+
+            training_data = generate_training_data(num_samples=1000, random_seed=42)
+            train_and_evaluate_models(training_data, settings.model_path)
 
     index_metadata = settings.vector_store_path / "index_metadata.json"
     if not index_metadata.is_file():
-        index_knowledge(persist_path=settings.vector_store_path)
+        bundled_index = PROJECT_ROOT / "artifacts" / "vector_store"
+        if (bundled_index / "index_metadata.json").is_file():
+            shutil.copytree(
+                bundled_index,
+                settings.vector_store_path,
+                dirs_exist_ok=True,
+            )
+        else:
+            from app.rag.index import index_knowledge
+
+            index_knowledge(persist_path=settings.vector_store_path)
 
 
 def _serve_api() -> None:

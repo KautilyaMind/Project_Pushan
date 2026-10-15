@@ -154,6 +154,10 @@ PUSHAN_LLM_MODEL = "gemini-3.1-flash-lite"
 Copy the exact pooled connection string from Neon's connection dialog. Do not add
 these values to `.env.example`, commit them, or paste real credentials into GitHub.
 
+The `streamlit-cloud` branch includes prebuilt, non-secret ML and RAG artifacts.
+Cloud startup copies them into writable temporary storage instead of retraining and
+re-indexing on every cold start. If they are missing, Pushan rebuilds them safely.
+
 Docker startup:
 
 ```powershell

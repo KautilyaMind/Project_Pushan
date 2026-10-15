@@ -1,0 +1,6 @@
+{
+  "documents_indexed": 5,
+  "chunks_indexed": 42,
+  "indexed_at": "2026-08-29T14:08:56.855820+00:00",
+  "embedding_model": "local-hash-v1"
+}
